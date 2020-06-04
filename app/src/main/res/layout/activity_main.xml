@@ -4,24 +4,41 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context=".MainActivity">
+    tools:context=".MainActivity"
+    android:id="@+id/root">
+
+    <TextView
+        android:layout_width="60dp"
+        android:layout_height="50dp"
+        android:text="Test"
+        android:layout_marginTop="200dp"
+        android:layout_marginLeft="160dp"
+        android:textSize="30dp"
+        android:id="@+id/movable_text"/>
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_centerHorizontal="true"
         android:layout_centerVertical="true"
-        android:text="X accel:"
+
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintLeft_toLeftOf="parent"
         app:layout_constraintRight_toRightOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        android:id="@+id/x_axis"/>
+        android:id="@+id/x_axis"
+        android:textSize="20dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:foreground="?android:attr/selectableItemBackground"/>
 
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Y accel:"
+        android:textSize="20dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:foreground="?android:attr/selectableItemBackground"
         android:layout_below="@+id/x_axis"
         android:layout_centerHorizontal="true"
         android:id="@+id/y_axis"/>
@@ -29,9 +46,32 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Z accel:"
+        android:textSize="20dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:foreground="?android:attr/selectableItemBackground"
         android:layout_below="@+id/y_axis"
         android:layout_centerHorizontal="true"
         android:id="@+id/z_axis"/>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@+id/z_axis"
+        android:layout_centerHorizontal="true"
+        android:id="@+id/overall"
+        android:textSize="20dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:foreground="?android:attr/selectableItemBackground"/>
+
+    <Button
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@+id/z_axis"
+        android:layout_centerHorizontal="true"
+        android:text="Move"
+        android:layout_marginTop="32dp"
+        android:id="@+id/move_button"/>
 
 </RelativeLayout>
