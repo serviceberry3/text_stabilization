@@ -15,13 +15,16 @@ android {
 
         externalNativeBuild {
             cmake {
-                arguments '-DANDROID_TOOLCHAIN=clang'
-                cppFlags "-frtti -fexceptions", '-fsigned-char'
+                arguments '-DANDROID_TOOLCHAIN=clang', '-DANDROID_PLATFORM=android-16', '-DANDROID_STL=c++_static'
+                cppFlags "-frtti -fexceptions", '-fsigned-char', "-std=c++11"
                 abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86', 'x86_64'
-                cFlags '-O3', '-fsigned-char'
+                cFlags '-O3', '-fsigned-char', '-std=c11'
             }
         }
 
+        ndk {
+            abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86', 'x86_64'
+        }
     }
 
     buildTypes {
@@ -34,9 +37,9 @@ android {
     externalNativeBuild {
         cmake {
             path "CMakeLists.txt"
+            version = "3.10.2"
         }
     }
-
 
     ndkVersion '21.2.6472646'
 }

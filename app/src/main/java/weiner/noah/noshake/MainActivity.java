@@ -53,14 +53,16 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     //load up native C code
     static {
-        System.loadLibrary("native-lib");
+        System.loadLibrary("circ_buffer");
     }
 
+
     private native String stringFromJNI();
+    private native String hello();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        Log.d("C CODE", stringFromJNI());
+        Log.d("C CODE", hello());
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
