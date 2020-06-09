@@ -56,15 +56,43 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         System.loadLibrary("circ_buffer");
     }
 
+    private native void circular_buffer(long sz);
 
-    private native String stringFromJNI();
-    private native String hello();
+    //reset the circular buffer to empty, head == tail
+    private native void circular_buf_reset();
+
+    private native void retreat_pointer();
+
+    private native void advance_pointer();
+
+    //put version 1 continues to add data if the buffer is full
+    //old data is overwritten
+    private native void circular_buf_put(float data);
+
+    //retrieve a value from the buffer
+    //returns 0 on success, -1 if the buffer is empty
+    private native float circular_buf_get();
+
+    //returns true if the buffer is empty
+    private native boolean circular_buf_empty();
+
+    //returns true if the buffer is full
+    private native boolean circular_buf_full();
+
+    //returns the maximum capacity of the buffer
+    private native long circular_buf_capacity();
+
+    //returns the current number of elements in the buffer
+    private native long circular_buf_size();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
-        Log.d("C CODE", hello());
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        //initialize a circular buffer of 10k floats
+        circular_buffer(10000);
+        Log.d("DBUG", "Circular buffer initialized in C++");
 
         gravity[0]=gravity[1]=gravity[2] = 0;
         accelBuffer[0]=accelBuffer[1]=accelBuffer[2] = 0;
@@ -183,7 +211,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                         Toast.makeText(getApplicationContext(), String.format("Clearing", System.currentTimeMillis()), Toast.LENGTH_SHORT).show();
 
                         //clear out the acceleration buffer
-                        buffer1.clear();
+                        //buffer1.clear();
                     }
                 });
             }

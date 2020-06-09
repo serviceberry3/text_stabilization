@@ -3,8 +3,6 @@
 # your build.
 cmake_minimum_required(VERSION 3.4.1)
 
-include_directories(src/main/cpp/circ_buffer.h)
-
 # Specifies a library name, specifies whether the library is STATIC or
 # SHARED, and provides relative paths to the source code. You can
 # define multiple libraries by adding multiple add_library() commands,
@@ -17,8 +15,8 @@ add_library( # Specifies the name of the library.
              SHARED
 
              # Provides a relative path to your source file(s).
-        src/main/cpp/circ_buffer.c
-        src/main/cpp/circ_buffer.h)
+        src/main/cpp/circ_buffer.cpp
+        src/main/cpp/circ_buffer.hh)
 
 
 # Searches for a specified prebuilt library and stores the path as a
