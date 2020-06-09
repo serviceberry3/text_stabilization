@@ -12,6 +12,16 @@ android {
         versionName "1.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+
+        externalNativeBuild {
+            cmake {
+                arguments '-DANDROID_TOOLCHAIN=clang'
+                cppFlags "-frtti -fexceptions", '-fsigned-char'
+                abiFilters 'arm64-v8a', 'armeabi-v7a', 'x86', 'x86_64'
+                cFlags '-O3', '-fsigned-char'
+            }
+        }
+
     }
 
     buildTypes {
@@ -21,6 +31,14 @@ android {
         }
     }
 
+    externalNativeBuild {
+        cmake {
+            path "CMakeLists.txt"
+        }
+    }
+
+
+    ndkVersion '21.2.6472646'
 }
 
 dependencies {

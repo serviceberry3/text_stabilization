@@ -5,6 +5,7 @@ import androidx.appcompat.app.AppCompatActivity;
 import android.hardware.Sensor;
 import android.hardware.SensorManager;
 import android.os.Bundle;
+import android.os.Handler;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
@@ -17,7 +18,12 @@ import android.widget.Toast;
 
 import org.w3c.dom.Text;
 
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.List;
+import java.util.Timer;
+import java.util.TimerTask;
 
 public class MainActivity extends AppCompatActivity implements SensorEventListener, View.OnTouchListener {
     private Sensor accelerometer;
@@ -26,6 +32,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private float spring_const = 20;
     private float dampener_frix_const = (float) (2.0 * Math.sqrt(spring_const));
     private float alpha = (float) 0.8;
+    private float yFactor;
 
     private float[] gravity = new float[3];
 
@@ -34,11 +41,26 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     private float deltaX, deltaY, deltaZ;
 
-    private float 
+    private List<Float> buffer1 = new ArrayList<>();
 
+    //testing scheduling a task every 4 seconds
+    Timer timer;
+    TimerTask timerTask;
+
+    Handler handler = new Handler();
+
+    private long bufferStart;
+
+    //load up native C code
+    static {
+        System.loadLibrary("native-lib");
+    }
+
+    private native String stringFromJNI();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        Log.d("C CODE", stringFromJNI());
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
@@ -55,9 +77,11 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
 
+
         //check for accelerometers present
         //checkAccelerometer();
 /*
+
         while (true) {
             ((TextView) findViewById(R.id.x_axis)).setText("Testing");
             ((TextView) findViewById(R.id.y_axis)).setText("Testing");
@@ -70,7 +94,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             @Override
             public void onClick(View v) {
                 //Toast.makeText(MainActivity.this, "button", Toast.LENGTH_SHORT).show();
-
             }
         });
     }
@@ -120,16 +143,52 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     }
 
     @Override
-    protected void onResume() {
+    protected void onResume() { //stuff to do when app comes back from background
         super.onResume();
-
         sensorManager.registerListener(this, sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), SensorManager.SENSOR_DELAY_NORMAL);
+        startTimer();
     }
 
 
-    public int checkAccelerometer() {
-        SensorManager sensorManager = (SensorManager)getSystemService(SENSOR_SERVICE);
 
+    public void startTimer() {
+        //set a new Timer
+        timer = new Timer();
+
+        //initialize the TimerTask's job
+        initializeTimerTask();
+
+        //schedule the timer, after the first 5000ms the TimerTask will run every 10000ms
+        timer.schedule(timerTask, 2000, 4000); //
+    }
+
+    public void stoptimertask() {
+        //stop the timer, if it's not already null
+        if (timer != null) {
+            timer.cancel();
+            timer = null;
+        }
+    }
+
+    public void initializeTimerTask() {
+        timerTask = new TimerTask() {
+            public void run() {
+
+                //use a handler to run a toast that shows the current timestamp
+                handler.post(new Runnable() {
+                    public void run() {
+                        //show a toast
+                        Toast.makeText(getApplicationContext(), String.format("Clearing", System.currentTimeMillis()), Toast.LENGTH_SHORT).show();
+
+                        //clear out the acceleration buffer
+                        buffer1.clear();
+                    }
+                });
+            }
+        };
+    }
+
+    public int checkAccelerometer() {
         List<Sensor> sensors = sensorManager.getSensorList(Sensor.TYPE_ACCELEROMETER);
 
         //nothing found, something's wrong, error
@@ -180,8 +239,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         TextView view = (TextView) findViewById(R.id.movable_text);
         //update position of text based on acceleration
         RelativeLayout.LayoutParams layoutParams = (RelativeLayout.LayoutParams) view.getLayoutParams();
-        layoutParams.leftMargin+=deltaX * 100;
-        layoutParams.topMargin+=deltaY * 100;
+        layoutParams.leftMargin+=alpha * yFactor;
+        //layoutParams.topMargin+=alpha * yFactor;
         layoutParams.rightMargin = -250;
         layoutParams.bottomMargin = -250;
         view.setLayoutParams(layoutParams);
