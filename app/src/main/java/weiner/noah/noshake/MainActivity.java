@@ -6,6 +6,7 @@ import android.hardware.Sensor;
 import android.hardware.SensorManager;
 import android.os.Bundle;
 import android.os.Handler;
+import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
@@ -26,13 +27,18 @@ import java.util.Timer;
 import java.util.TimerTask;
 
 public class MainActivity extends AppCompatActivity implements SensorEventListener, View.OnTouchListener {
+    //value of e
+    private final double e = 2.71828;
+
     private Sensor accelerometer;
     private SensorManager sensorManager;
     private int _xDelta, _yDelta;
-    private float spring_const = 20;
+    private float spring_const = 5;
     private float dampener_frix_const = (float) (2.0 * Math.sqrt(spring_const));
-    private float alpha = (float) 0.8;
-    private float yFactor;
+    private float alpha = (float) 0.8, yFactor = 300;
+    private double HofT, YofT, startTime, timeElapsed;
+
+    private int times=0;
 
     private float[] gravity = new float[3];
 
@@ -85,14 +91,28 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     //returns the current number of elements in the buffer
     private native long circular_buf_size();
 
+    private native float aggregate_last_n_entries(int n);
+
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        //get pixel dimensions of screen
+        DisplayMetrics displayMetrics = new DisplayMetrics();
+        getWindowManager().getDefaultDisplay().getMetrics(displayMetrics);
+        int height = displayMetrics.heightPixels;
+        int width = displayMetrics.widthPixels;
+
+        Log.d("DBUG", String.format("%d by %d", height, width));
+
         //initialize a circular buffer of 10k floats
-        circular_buffer(10000);
-        Log.d("DBUG", "Circular buffer initialized in C++");
+        circular_buffer(60);
+        boolean test = circular_buf_empty();
+        if (test) {
+            Log.d("DBUG", "Circular buffer initialized in C++");
+        }
 
         gravity[0]=gravity[1]=gravity[2] = 0;
         accelBuffer[0]=accelBuffer[1]=accelBuffer[2] = 0;
@@ -189,7 +209,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         initializeTimerTask();
 
         //schedule the timer, after the first 5000ms the TimerTask will run every 10000ms
-        timer.schedule(timerTask, 2000, 4000); //
+        timer.schedule(timerTask, 0, 4000);
     }
 
     public void stoptimertask() {
@@ -207,9 +227,15 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 //use a handler to run a toast that shows the current timestamp
                 handler.post(new Runnable() {
                     public void run() {
-                        //show a toast
-                        Toast.makeText(getApplicationContext(), String.format("Clearing", System.currentTimeMillis()), Toast.LENGTH_SHORT).show();
+                        //reset the clock
+                        startTime = System.currentTimeMillis();
 
+                        if (circular_buf_full()) {
+                            //show a toast
+                            Toast.makeText(getApplicationContext(), String.format("%f", aggregate_last_n_entries(15)), Toast.LENGTH_SHORT).show();
+                            //Toast.makeText(getApplicationContext(), "fuk", Toast.LENGTH_SHORT).show();
+                        }
+                        times=0;
                         //clear out the acceleration buffer
                         //buffer1.clear();
                     }
@@ -236,6 +262,14 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     }
 
     private void getAccelerometer(SensorEvent event) {
+        timeElapsed = (System.currentTimeMillis() - startTime)/1000;
+
+        //plug in t to the system impulse response equation
+        HofT = Math.pow(timeElapsed*e, (-1*timeElapsed*Math.sqrt(spring_const)));
+        //Log.d("TIME", String.format("%f", timeElapsed));
+        Log.d("H VALUE", String.format("%f", HofT));
+
+        times++;
         float[] values = event.values;
 
         //use low-pass filter to affect the gravity readings slightly based on what they were before
@@ -248,6 +282,13 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         float x = values[0]-gravity[0];
         float y = values[1]-gravity[1];
         float z = values[2]-gravity[2];
+
+        //add the x acceleration value into the circular buffer
+        circular_buf_put(x);
+
+        //calculate Y(t) using H(t) and inverse of acceleration
+        YofT = -1 * x * HofT;
+        Log.d("Y of T", String.format("%f", YofT));
 
         deltaX = x - accelBuffer[0];
         deltaY = y - accelBuffer[1];
@@ -262,15 +303,17 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         long actualTime = event.timestamp;
 
-        if (accelSqRt >= 1.2) {
+        if (aggregate_last_n_entries(15) >= 1.2) {
             Toast.makeText(MainActivity.this, "Device shaken.", Toast.LENGTH_SHORT).show();
         }
 
         TextView view = (TextView) findViewById(R.id.movable_text);
+
         //update position of text based on acceleration
         RelativeLayout.LayoutParams layoutParams = (RelativeLayout.LayoutParams) view.getLayoutParams();
-        layoutParams.leftMargin+=alpha * yFactor;
-        //layoutParams.topMargin+=alpha * yFactor;
+
+        layoutParams.leftMargin+=yFactor * YofT;
+        layoutParams.topMargin+=yFactor * YofT;
         layoutParams.rightMargin = -250;
         layoutParams.bottomMargin = -250;
         view.setLayoutParams(layoutParams);

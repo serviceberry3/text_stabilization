@@ -39,6 +39,9 @@ public:
     //returns the current number of elements in the buffer
     size_t circular_buf_size();
 
+    //give an average of the last n entries in the buffer
+    float aggregate_last_n_entries(int n);
+
 private:
     float* buffer;
     size_t head;

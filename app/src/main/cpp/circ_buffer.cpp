@@ -5,6 +5,9 @@ static circular_buffer* buff = NULL;
 
 circular_buffer::circular_buffer(size_t sz) {
     buffer = (float*) memalign(16, sizeof(float)*sz);
+    max = sz;
+    circular_buf_reset();
+    assert(circular_buf_empty());
 }
 
 
@@ -47,11 +50,51 @@ void circular_buffer::advance_pointer() {
     head = (head+1) % max;
 
     //check if the advancement made head equal to tail, which means the circular queue is now full
-    full = (head == tail);
+    full = (head == tail); //if it was full before the advance it'll be full after too
 }
 
 bool circular_buffer::circular_buf_empty() {
     return (!full && (head==tail));
+}
+
+bool circular_buffer::circular_buf_full() {
+    return full;
+}
+
+float circular_buffer::aggregate_last_n_entries(int n) {
+    assert(buff);
+    size_t size = circular_buf_size();
+    if (n>size) {
+        return -1;
+    }
+    float average=0;
+    int position = (int) size-1;
+    for (int i=position; i>=position-n; i--) {
+        average+=abs(buffer[i]);
+    }
+
+    return average/n;
+}
+
+size_t circular_buffer::circular_buf_size() {
+    //if the buffer is full, our size is the max
+    size_t size = max;
+
+    if (!full)
+    {
+        //if circular buffer is not full and head is greater than tail, find difference to get current size
+        if (head >= tail)
+        {
+            size = head - tail;
+        }
+
+        //otherwise we've taken out stuff past the head, so the current size is the maximum minus however much has been taken out (space between head and tail)
+        else
+        {
+            size = (max + head - tail);
+        }
+    }
+    return size;
 }
 
 //java interface functions
@@ -69,7 +112,7 @@ extern "C" {
     }
 
     JNIEXPORT jfloat Java_weiner_noah_noshake_MainActivity_circular_1buf_1get(JNIEnv* __unused javaEnvironment, jobject __unused obj) {
-        buff->circular_buf_get();
+        return buff->circular_buf_get();
     }
 
     JNIEXPORT void Java_weiner_noah_noshake_MainActivity_retreat_1pointer(JNIEnv* __unused javaEnvironment, jobject __unused obj) {
@@ -80,8 +123,20 @@ extern "C" {
         buff->advance_pointer();
     }
 
-    JNIEXPORT void Java_weiner_noah_noshake_MainActivity_circular_1buf_1empty(JNIEnv* __unused javaEnvironment, jobject __unused obj) {
-        buff->circular_buf_empty();
+    JNIEXPORT jboolean Java_weiner_noah_noshake_MainActivity_circular_1buf_1empty(JNIEnv* __unused javaEnvironment, jobject __unused obj) {
+        return buff->circular_buf_empty();
+    }
+
+    JNIEXPORT jsize Java_weiner_noah_noshake_MainActivity_circular_1buf_1size(JNIEnv* __unused javaEnvironment, jobject __unused obj) {
+        return buff->circular_buf_size();
+    }
+
+    JNIEXPORT jfloat Java_weiner_noah_noshake_MainActivity_aggregate_1last_1n_1entries(JNIEnv* __unused javaEnvironment, jobject __unused obj, jint n) {
+        return buff->aggregate_last_n_entries(n);
+    }
+
+    JNIEXPORT jboolean Java_weiner_noah_noshake_MainActivity_circular_1buf_1full(JNIEnv* __unused javaEnvironment, jobject __unused obj) {
+        return buff->circular_buf_full();
     }
 
 }
