@@ -50,9 +50,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private Sensor accelerometer;
     private SensorManager sensorManager;
     private int _xDelta, _yDelta;
-    private float spring_const = (float) 0.5;
+    private float spring_const = (float) 0.001;
     private float dampener_frix_const = (float) (2.0 * Math.sqrt(spring_const));
-    private float alpha = (float) 0.8, yFactor = 50;
+    private float alpha = (float) 0.8, yFactor = 90;
     private double HofT, YofT, startTime, timeElapsed;
 
     private int times=0;
@@ -65,12 +65,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private float deltaX, deltaY, deltaZ;
 
     private List<Float> buffer1 = new ArrayList<>();
-
-    //testing scheduling a task every 4 seconds
-    Timer timer;
-    TimerTask timerTask;
-
-    Handler handler = new Handler();
 
     private long bufferStart;
 
@@ -148,23 +142,15 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             Log.e("DBUG", "Sensor manager came up null");
         }
 
-        accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER);
-
+        //get the
+        accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION);
 
         //check for accelerometers present
         if (checkAccelerometer()<0) {
             Toast.makeText(MainActivity.this, "No accelerometer found.", Toast.LENGTH_SHORT).show();
         }
-/*
 
-        while (true) {
-            ((TextView) findViewById(R.id.x_axis)).setText("Testing");
-            ((TextView) findViewById(R.id.y_axis)).setText("Testing");
-            ((TextView) findViewById(R.id.z_axis)).setText("Testing");
-        }
-
- */
-    //set click listener for the button
+        //set click listener for the RESET button
         ((Button)findViewById(R.id.move_button)).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -174,6 +160,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         });
     }
 
+    //function to move the "ClickandDrag" text around the screen when the user touches on it and drags
     @Override
     public boolean onTouch(View v, MotionEvent event) {
         int X = (int) event.getRawX();
@@ -207,12 +194,10 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     @Override
     public void onSensorChanged(SensorEvent event) {
         if (event.sensor.getType() == Sensor.TYPE_LINEAR_ACCELERATION) {
-            //NoShake implementation
-
-
             //layoutSensor.setVisibility(View.INVISIBLE);
-            getAccelerometer(event);
 
+            //noShake implementation
+            noShake中林(event);
 
             //more naive implementation
             //naivePhysicsImplementation(event);
@@ -294,42 +279,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         layoutSensor.setTranslationY(0);
     }
 
-    public void startTimer() {
-        //set a new Timer
-        timer = new Timer();
-
-        //initialize the TimerTask's job
-        initializeTimerTask();
-
-        //schedule the timer, after the first 5000ms the TimerTask will run every 10000ms
-        timer.schedule(timerTask, 0, 4000);
-    }
-
-    public void stopTimerTask() {
-        //stop the timer, if it's not already null
-        if (timer != null) {
-            timer.cancel();
-            timer = null;
-        }
-    }
-
-
-    //this is a function to initialize the timertask with a specific runnable/action to do
-    public void initializeTimerTask() {
-        //instantiate a new timertask
-        timerTask = new TimerTask() {
-            public void run() {
-                //use a handler to run a toast that shows the current timestamp
-                handler.post(new Runnable() { //post it to be run immediately by Looper
-                    public void run() {
-                        //reset the clock
-                        startTime = System.currentTimeMillis();
-                    }
-                });
-            }
-        };
-    }
-
     //check to see if accelerometer is connected; print out the sensors found via Toasts
     public int checkAccelerometer() {
         List<Sensor> sensors = sensorManager.getSensorList(Sensor.TYPE_ACCELEROMETER);
@@ -348,9 +297,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         return 0;
     }
 
-    private void getAccelerometer(SensorEvent event) {
-        times++;
-
+    private void noShake中林(SensorEvent event) {
         timeElapsed = (System.currentTimeMillis() - startTime)/1000;
 
         //plug in t to the system impulse response equation
@@ -367,7 +314,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         gravity[1] = alpha * gravity[1] + (1 - alpha) * event.values[1];
         gravity[2] = alpha * gravity[2] + (1 - alpha) * event.values[2];
 
-        //subtract the gravity affect from the actual accelerometer reading on each axis
+        //subtract the gravity affect from the actual accelerometer reading on each axis (standardize the data)
         float x = values[0]-gravity[0];
         float y = values[1]-gravity[1];
         float z = values[2]-gravity[2];
@@ -375,11 +322,12 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         //add the x acceleration value into the circular buffer
         circular_buf_put(x);
 
-        //calculate Y(t) using H(t) and inverse of acceleration as specified in the paper
+        //calculate Y(t) using H(t) and acceleration as specified in the paper
         YofT = x * HofT;
 
-        //Log.d("Y of T", String.format("%f", YofT));
+        Log.d("Y of T", String.format("%f", YofT));
 
+        /*
         //calculate how much the acceleration changed from what it was before
         deltaX = x - accelBuffer[0];
         deltaY = y - accelBuffer[1];
@@ -387,8 +335,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         //calculate overall acceleration vector
         float accelSqRt = (x * x + y * y + z * z) / (SensorManager.GRAVITY_EARTH * SensorManager.GRAVITY_EARTH);
+         */
 
-
+        /*
         //update the stats on the UI to show the accelerometer readings
         ((TextView) findViewById(R.id.x_axis)).setText(String.format("X accel: %f", x));
         ((TextView) findViewById(R.id.y_axis)).setText(String.format("Y accel: %f", y));
@@ -400,9 +349,11 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         //get current layout parameters (current position, etc) of the NoShake sample text
         editedLayoutParams = (RelativeLayout.LayoutParams) noShakeText.getLayoutParams();
+         */
+
 
         //this is a check to see whether the device is shaking
-        if (aggregate_last_n_entries(15) >= 0.1) {
+        if (aggregate_last_n_entries(15) >= 0.6) { //empirically-determined threshold in order to keep text still when not really shaking
             //Log.d("SHAKER", "Device shaken");
             startTime = System.currentTimeMillis();
 

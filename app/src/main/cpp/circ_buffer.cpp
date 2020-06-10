@@ -25,16 +25,18 @@ void circular_buffer::circular_buf_put(float data) {
     advance_pointer();
 }
 
+//get one member from the queue--namely, the FIRST-IN data that's currently located at the tail position
 float circular_buffer::circular_buf_get() {
-    int r = -1;
+    //error code of -10000 is safe for our purposes
+    float r = -10000;
 
     if (!circular_buf_empty()) {
+        r = buffer[tail];
         retreat_pointer();
-        return buffer[tail];
     }
-    else {
-        return NULL;
-    }
+
+    //return data at tail, otherwise return -10000;
+    return r;
 }
 
 void circular_buffer::retreat_pointer() {
@@ -50,11 +52,14 @@ size_t circular_buffer::circular_buf_capacity() {
 
 }
 
+//advance the queue head (used after adding data), and possibly advance the tail if the buffer is already full
 void circular_buffer::advance_pointer() {
+    //if the buffer is full (head=tail), we need to throw out the the FIRST-IN data by advancing the tail as well (it's a FIFO queue)
     if (full) {
         tail = (tail+1) % max;
     }
 
+    //advance the head no matter what
     head = (head+1) % max;
 
     //check if the advancement made head equal to tail, which means the circular queue is now full
@@ -62,25 +67,41 @@ void circular_buffer::advance_pointer() {
 }
 
 bool circular_buffer::circular_buf_empty() {
+    //boolean of negation of full anded with head=tail
     return (!full && (head==tail));
 }
 
+//check if the circular buffer is full
 bool circular_buffer::circular_buf_full() {
     return full;
 }
 
+//take the average of the last n entries behind the queue head. Used to determine if the device is shaking.
 float circular_buffer::aggregate_last_n_entries(int n) {
+    //make sure buffer is non-NULL
     assert(buff);
+
+    //make sure the requested n is not greater than the current population of the queue
     size_t size = circular_buf_size();
     if (n>size) {
         return -1;
     }
+
+    //initialize an average
     float average=0;
+
+    //find the head of the queue as an integer
     int position = (int) head;
+
+    //run back n spaces in the queue, adding all entries to the average
     for (int i=position; i>=position-n; i--) {
+        //i cannot become negative as long as we checked that the requested n is <= current number of items in the queue
+
+        //add absolute value acceleration reading the the average
         average+=abs(buffer[i]);
     }
 
+    //divide average by number of elements read to get aggregate reading
     return average/(float)n;
 }
 
