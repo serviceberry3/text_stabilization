@@ -42,6 +42,9 @@ public:
     //give an average of the last n entries in the buffer
     float aggregate_last_n_entries(int n);
 
+    //retrieve the head position of the circular buffer
+    size_t circular_buf_get_head();
+
 private:
     float* buffer;
     size_t head;

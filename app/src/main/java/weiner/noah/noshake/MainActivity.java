@@ -152,7 +152,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
 
         //check for accelerometers present
-        //checkAccelerometer();
+        if (checkAccelerometer()<0) {
+            Toast.makeText(MainActivity.this, "No accelerometer found.", Toast.LENGTH_SHORT).show();
+        }
 /*
 
         while (true) {
@@ -429,7 +431,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         //reset the clock after 4 seconds if there was no shaking start??
         else if (timeElapsed>=4) {
-            Log.d("TIMES", String.format("%d", times));
+            //Log.d("TIMES", String.format("%d", times));
             times=0;
             startTime = System.currentTimeMillis();
         }

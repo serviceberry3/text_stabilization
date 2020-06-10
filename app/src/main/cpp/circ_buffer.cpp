@@ -42,6 +42,14 @@ void circular_buffer::retreat_pointer() {
     tail = (tail+1) % max;
 }
 
+size_t circular_buffer::circular_buf_get_head() {
+    return head;
+}
+
+size_t circular_buffer::circular_buf_capacity() {
+
+}
+
 void circular_buffer::advance_pointer() {
     if (full) {
         tail = (tail+1) % max;
@@ -68,12 +76,12 @@ float circular_buffer::aggregate_last_n_entries(int n) {
         return -1;
     }
     float average=0;
-    int position = (int) size-1;
+    int position = (int) head;
     for (int i=position; i>=position-n; i--) {
         average+=abs(buffer[i]);
     }
 
-    return average/n;
+    return average/(float)n;
 }
 
 size_t circular_buffer::circular_buf_size() {
@@ -136,6 +144,10 @@ extern "C" {
     }
 
     JNIEXPORT jboolean Java_weiner_noah_noshake_MainActivity_circular_1buf_1full(JNIEnv* __unused javaEnvironment, jobject __unused obj) {
+        return buff->circular_buf_full();
+    }
+
+    JNIEXPORT jlong Java_weiner_noah_noshake_MainActivity_circular_1buf_1capacity(JNIEnv* __unused javaEnvironment, jobject __unused obj) {
         return buff->circular_buf_full();
     }
 
