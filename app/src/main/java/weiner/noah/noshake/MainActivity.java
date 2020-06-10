@@ -28,16 +28,20 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     //NAIVE IMPLEMENTATION ACCEL ARRAYS
 
     //temporary array to store raw linear accelerometer data before low-pass filter applied
-    private final float[] tempAcc = new float[3];
+    private final float[] NtempAcc = new float[3];
 
     //acceleration array for data after filtering
-    private final float[] acc = new float[3];
+    private final float[] Nacc = new float[3];
 
     //velocity array (calculated from acceleration values)
-    private final float[] velocity = new float[3];
+    private final float[] Nvelocity = new float[3];
 
     //position (displacement) array (calculated from dVelocity values)
-    private final float[] position = new float[3];
+    private final float[] Nposition = new float[3];
+
+    //NOSHAKE SPRING IMPLEMENTATION ACCEL ARRAYS
+    private final float[] StempAcc = new float[3];
+    private final float[] Sacc = new float[3];
 
     //long to use for keeping track of thyme
     private long timestamp = 0;
@@ -70,6 +74,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private float[] accelBuffer = new float[3];
 
     private float deltaX, deltaY, deltaZ;
+
+    //is the device shaking??
+    private int shaking=0;
 
     //load up native C code
     static {
@@ -107,6 +114,35 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     private native float aggregate_last_n_entries(int n);
 
+    //thread that writes data to the circular buffer
+    class getDataWriteBuffer implements Runnable {
+        float xAccel;
+
+        getDataWriteBuffer(float x) {
+            this.xAccel = x;
+        }
+
+        @Override
+        public void run() {
+            circular_buf_put(xAccel);
+        }
+    }
+
+    //thread that reads/aggregates the last ~1 second of data from the buffer and determines if the devices is shaking
+    class detectShaking implements Runnable {
+        @Override
+        public void run() {
+            while(true) {
+                if (aggregate_last_n_entries(10) >= NoShakeConstants.shaking_threshold) {
+                    shaking = 1;
+                    Log.d("TAG", "Device shaking set");
+                }
+                else
+                    shaking = 0;
+            }
+        }
+    }
+
     //set up view constants and button
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -125,14 +161,12 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         int height = displayMetrics.heightPixels;
         int width = displayMetrics.widthPixels;
 
-        Log.d("DBUG", String.format("%d by %d", height, width));
-
-        //initialize a circular buffer of 10k floats
+        //initialize a circular buffer of 85 floats
         circular_buffer(85);
-        boolean test = circular_buf_empty();
-        if (test) {
-            Log.d("DBUG", "Circular buffer initialized in C++");
-        }
+
+        //immediately start a looping thread that constantly reads the last 15 data and sets the "shaking" flag accordingly
+        detectShaking shakeListener = new detectShaking();
+        new Thread(shakeListener).start();
 
         gravity[0]=gravity[1]=gravity[2] = 0;
         accelBuffer[0]=accelBuffer[1]=accelBuffer[2] = 0;
@@ -142,10 +176,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         //initialize a SensorEvent
         sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
-
-        if (sensorManager==null) {
-            Log.e("DBUG", "Sensor manager came up null");
-        }
 
         //get the linear accelerometer as object from the system
         accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION);
@@ -184,6 +214,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             case MotionEvent.ACTION_POINTER_UP:
                 break;
             case MotionEvent.ACTION_MOVE:
+                //make live adjustment
                 RelativeLayout.LayoutParams layoutParams = (RelativeLayout.LayoutParams) view.getLayoutParams();
                 layoutParams.leftMargin = X - _xDelta;
                 layoutParams.topMargin = Y - _yDelta;
@@ -192,6 +223,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 view.setLayoutParams(layoutParams);
                 break;
         }
+
+        //refresh the text
         view.invalidate();
         return true;
     }
@@ -202,10 +235,10 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             //layoutSensor.setVisibility(View.INVISIBLE);
 
             //noShake implementation
-            //noShake中林(event);
+            noShake中林(event);
 
             //more naive implementation
-            naivePhysicsImplementation(event);
+            //naivePhysicsImplementation(event);
         }
     }
 
@@ -224,60 +257,59 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         if (timestamp != 0)
         {
             //fill the temporary acceleration vector with the current sensor readings
-            tempAcc[0] = Utils.rangeValue(event.values[0], -NaiveConstants.MAX_ACC, NaiveConstants.MAX_ACC);
-            tempAcc[1] = Utils.rangeValue(event.values[1], -NaiveConstants.MAX_ACC, NaiveConstants.MAX_ACC);
-            tempAcc[2] = Utils.rangeValue(event.values[2], -NaiveConstants.MAX_ACC, NaiveConstants.MAX_ACC);
+            NtempAcc[0] = Utils.rangeValue(event.values[0], -NaiveConstants.MAX_ACC, NaiveConstants.MAX_ACC);
+            NtempAcc[1] = Utils.rangeValue(event.values[1], -NaiveConstants.MAX_ACC, NaiveConstants.MAX_ACC);
+            NtempAcc[2] = Utils.rangeValue(event.values[2], -NaiveConstants.MAX_ACC, NaiveConstants.MAX_ACC);
 
             //apply lowpass filter and store results in acc float array
-            Utils.lowPassFilter(tempAcc, acc, NaiveConstants.LOW_PASS_ALPHA_DEFAULT);
+            Utils.lowPassFilter(NtempAcc, Nacc, NaiveConstants.LOW_PASS_ALPHA_DEFAULT);
 
             //get change in time, convert from nanoseconds to seconds
-            float dt = (event.timestamp - timestamp) * NaiveConstants.NS2S;
-
+            float dt = (event.timestamp - timestamp) * NaiveConstants.NANOSEC_TO_SEC;
 
             //get velocity and position
             for (int i = 0; i < 3; i++)
             {
                 //find friction to be applied using last velocity reading
-                float vFrictionToApply = NaiveConstants.VELOCITY_FRICTION_DEFAULT * velocity[i];
-                velocity[i] += (acc[i] * dt) - vFrictionToApply;
+                float vFrictionToApply = NaiveConstants.VELOCITY_FRICTION_DEFAULT * Nvelocity[i];
+                Nvelocity[i] += (Nacc[i] * dt) - vFrictionToApply;
 
                 //if resulting value is Nan or infinity, just change it to 0
-                velocity[i] = Utils.fixNanOrInfinite(velocity[i]);
+                Nvelocity[i] = Utils.fixNanOrInfinite(Nvelocity[i]);
 
                 //find position friction to be applied using last position reading
-                float pFrictionToApply = NaiveConstants.POSITION_FRICTION_DEFAULT * position[i];
-                position[i] += (velocity[i] * NaiveConstants.VELOCITY_AMPL_DEFAULT * dt) - pFrictionToApply;
+                float pFrictionToApply = NaiveConstants.POSITION_FRICTION_DEFAULT * Nposition[i];
+                Nposition[i] += (Nvelocity[i] * NaiveConstants.VELOCITY_AMPL_DEFAULT * dt) - pFrictionToApply;
 
                 //set max limits on the position change
-                position[i] = Utils.rangeValue(position[i], -NaiveConstants.MAX_POS_SHIFT, NaiveConstants.MAX_POS_SHIFT);
+                Nposition[i] = Utils.rangeValue(Nposition[i], -NaiveConstants.MAX_POS_SHIFT, NaiveConstants.MAX_POS_SHIFT);
             }
         }
 
         //if timestamp is 0, we just started
         else
         {
-            velocity[0] = velocity[1] = velocity[2] = 0f;
-            position[0] = position[1] = position[2] = 0f;
+            Nvelocity[0] = Nvelocity[1] = Nvelocity[2] = 0f;
+            Nposition[0] = Nposition[1] = Nposition[2] = 0f;
 
             //fill in the acceleration float array
-            acc[0] = Utils.rangeValue(event.values[0], -NaiveConstants.MAX_ACC, NaiveConstants.MAX_ACC);
-            acc[1] = Utils.rangeValue(event.values[1], -NaiveConstants.MAX_ACC, NaiveConstants.MAX_ACC);
-            acc[2] = Utils.rangeValue(event.values[2], -NaiveConstants.MAX_ACC, NaiveConstants.MAX_ACC);
+            Nacc[0] = Utils.rangeValue(event.values[0], -NaiveConstants.MAX_ACC, NaiveConstants.MAX_ACC);
+            Nacc[1] = Utils.rangeValue(event.values[1], -NaiveConstants.MAX_ACC, NaiveConstants.MAX_ACC);
+            Nacc[2] = Utils.rangeValue(event.values[2], -NaiveConstants.MAX_ACC, NaiveConstants.MAX_ACC);
         }
 
         //set timestamp to the current time of the sensor reading in nanoseconds
         timestamp = event.timestamp;
 
         //set the position of the text based on x and y axis values in position float array
-        layoutSensor.setTranslationX(-position[0]);
-        layoutSensor.setTranslationY(position[1]);
+        layoutSensor.setTranslationX(-Nposition[0]);
+        layoutSensor.setTranslationY(Nposition[1]);
     }
 
     private void reset()
     {
-        position[0] = position[1] = position[2] = 0;
-        velocity[0] = velocity[1] = velocity[2] = 0;
+        Nposition[0] = Nposition[1] = Nposition[2] = 0;
+        Nvelocity[0] = Nvelocity[1] = Nvelocity[2] = 0;
         timestamp = 0;
 
         layoutSensor.setTranslationX(0);
@@ -302,35 +334,35 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         return 0;
     }
 
+    //implementation of LZ's NoShake version
     private void noShake中林(SensorEvent event) {
         timeElapsed = (System.currentTimeMillis() - startTime)/1000;
 
-        //plug in t to the system impulse response equation
-        HofT = Math.pow(timeElapsed * NoShakeConstants.e, (-1*timeElapsed*Math.sqrt(NoShakeConstants.spring_const)));
+        StempAcc[0] = Utils.rangeValue(event.values[0], -NaiveConstants.MAX_ACC, NaiveConstants.MAX_ACC);
+        Utils.lowPassFilter(StempAcc, Sacc, NaiveConstants.LOW_PASS_ALPHA_DEFAULT);
 
+        //plug in t to the system impulse response equation
+        HofT = Math.pow(timeElapsed * NoShakeConstants.e, (-.1*timeElapsed*Math.sqrt(NoShakeConstants.spring_const)));
+
+        //to speed things up, start a separate thread to go write the acceleration data to the buffer while we finish calculations here
+        getDataWriteBuffer writerThread = new getDataWriteBuffer(Sacc[0]);
+        new Thread(writerThread).start();
+
+        //DEBUGGING
         //Log.d("TIME", String.format("%f", timeElapsed));
         //Log.d("H VALUE", String.format("%f", HofT));
 
-        //get the accelerometer readings (3 axes)
-        float[] values = event.values;
-
+        /* IF USING NORMAL ACCELEROMETER
         //use low-pass filter to affect the gravity readings slightly based on what they were before
         gravity[0] = NoShakeConstants.alpha * gravity[0] + (1 - NoShakeConstants.alpha) * event.values[0];
         gravity[1] = NoShakeConstants.alpha * gravity[1] + (1 - NoShakeConstants.alpha) * event.values[1];
         gravity[2] = NoShakeConstants.alpha * gravity[2] + (1 - NoShakeConstants.alpha) * event.values[2];
-
-        //subtract the gravity affect from the actual accelerometer reading on each axis (standardize the data)
-        float x = values[0]-gravity[0];
-        float y = values[1]-gravity[1];
-        float z = values[2]-gravity[2];
-
-        //add the x acceleration value into the circular buffer
-        circular_buf_put(x);
+         */
 
         //calculate Y(t) using H(t) and acceleration as specified in the paper
-        YofT = x * HofT;
+        YofT = Sacc[0] * HofT;
 
-        Log.d("Y of T", String.format("%f", YofT));
+        //Log.d("Y of T", String.format("%f", YofT));
 
         /*
         //calculate how much the acceleration changed from what it was before
@@ -347,23 +379,18 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         ((TextView) findViewById(R.id.x_axis)).setText(String.format("X accel: %f", x));
         ((TextView) findViewById(R.id.y_axis)).setText(String.format("Y accel: %f", y));
         ((TextView) findViewById(R.id.z_axis)).setText(String.format("Z accel: %f", z));
-        ((TextView) findViewById(R.id.overall)).setText(String.format("Overall: %f", accelSqRt));
-
-        //this is the time the event occurred in nanoseconds
-        long actualTime = event.timestamp;
 
         //get current layout parameters (current position, etc) of the NoShake sample text
         editedLayoutParams = (RelativeLayout.LayoutParams) noShakeText.getLayoutParams();
-         */
-
+        */
 
         //this is a check to see whether the device is shaking
-        if (aggregate_last_n_entries(15) >= 0.6) { //empirically-determined threshold in order to keep text still when not really shaking
-            //Log.d("SHAKER", "Device shaken");
+        if (shaking==1) { //empirically-determined threshold in order to keep text still when not really shaking
             startTime = System.currentTimeMillis();
 
             float toMoveX = Utils.rangeValue((float)(NoShakeConstants.yFactor * YofT), -NaiveConstants.MAX_POS_SHIFT, NaiveConstants.MAX_POS_SHIFT);
 
+            //** Move the view containing the text by the calculated amount of pixels
             layoutSensor.setTranslationX(toMoveX);
 
             /* INCORRECT IMPLEMENTATION
