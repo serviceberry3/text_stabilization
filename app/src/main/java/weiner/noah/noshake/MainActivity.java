@@ -6,6 +6,7 @@ import android.hardware.Sensor;
 import android.hardware.SensorManager;
 import android.os.Bundle;
 import android.os.Handler;
+import android.provider.SyncStateContract;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.MotionEvent;
@@ -26,7 +27,19 @@ import java.util.List;
 import java.util.Timer;
 import java.util.TimerTask;
 
+import weiner.noah.Constants;
+import weiner.noah.utils.Utils;
+
 public class MainActivity extends AppCompatActivity implements SensorEventListener, View.OnTouchListener {
+    //naive implementation
+    private final float[] tempAcc = new float[3];
+    private final float[] acc = new float[3];
+    private final float[] velocity = new float[3];
+    private final float[] position = new float[3];
+    private long timestamp = 0;
+
+    private View layoutSensor;
+
     //value of e
     private final double e = 2.71828;
 
@@ -99,6 +112,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        layoutSensor = findViewById(R.id.layout_sensor);
+
         //get pixel dimensions of screen
         DisplayMetrics displayMetrics = new DisplayMetrics();
         getWindowManager().getDefaultDisplay().getMetrics(displayMetrics);
@@ -143,7 +158,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         ((Button)findViewById(R.id.move_button)).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                //Toast.makeText(MainActivity.this, "button", Toast.LENGTH_SHORT).show();
+                Toast.makeText(MainActivity.this, "RESETTING", Toast.LENGTH_SHORT).show();
+                reset();
             }
         });
     }
@@ -182,24 +198,93 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     @Override
     public void onSensorChanged(SensorEvent event) {
-        if (event.sensor.getType() == Sensor.TYPE_ACCELEROMETER) {
+        if (event.sensor.getType() == Sensor.TYPE_LINEAR_ACCELERATION) {
+            //NoShake implementation
+
+            /*
+            layoutSensor.setVisibility(View.INVISIBLE);
             getAccelerometer(event);
+             */
+
+            //more naive implementation
+            naivePhysicsImplementation(event);
         }
     }
 
     @Override
     public void onAccuracyChanged(Sensor sensor, int accuracy) {
-
     }
 
     @Override
     protected void onResume() { //stuff to do when app comes back from background
         super.onResume();
-        sensorManager.registerListener(this, sensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER), SensorManager.SENSOR_DELAY_NORMAL);
-        startTimer();
+        sensorManager.registerListener(this, sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION), SensorManager.SENSOR_DELAY_NORMAL);
     }
 
 
+    public void naivePhysicsImplementation(SensorEvent event) {
+        if (timestamp != 0)
+        {
+            //fill the temporary acceleration vector with the current sensor readings
+            tempAcc[0] = Utils.rangeValue(event.values[0], -Constants.MAX_ACC, Constants.MAX_ACC);
+            tempAcc[1] = Utils.rangeValue(event.values[1], -Constants.MAX_ACC, Constants.MAX_ACC);
+            tempAcc[2] = Utils.rangeValue(event.values[2], -Constants.MAX_ACC, Constants.MAX_ACC);
+
+            //apply lowpass filter and store results in acc float array
+            Utils.lowPassFilter(tempAcc, acc, Constants.LOW_PASS_ALPHA_DEFAULT);
+
+            //get change in time, convert from nanoseconds to seconds
+            float dt = (event.timestamp - timestamp) * Constants.NS2S;
+
+
+            //get velocity and position
+            for (int i = 0; i < 3; i++)
+            {
+                //find friction to be applied using last velocity reading
+                float vFrictionToApply = Constants.VELOCITY_FRICTION_DEFAULT * velocity[i];
+                velocity[i] += (acc[i] * dt) - vFrictionToApply;
+
+                //if resulting value is Nan or infinity, just change it to 0
+                velocity[i] = Utils.fixNanOrInfinite(velocity[i]);
+
+                //find position friction to be applied using last position reading
+                float pFrictionToApply = Constants.POSITION_FRICTION_DEFAULT * position[i];
+                position[i] += (velocity[i] * Constants.VELOCITY_AMPL_DEFAULT * dt) - pFrictionToApply;
+
+                //set max limits on the position change
+                position[i] = Utils.rangeValue(position[i], -Constants.MAX_POS_SHIFT, Constants.MAX_POS_SHIFT);
+            }
+        }
+
+        //if timestamp is 0, we just started
+        else
+        {
+            velocity[0] = velocity[1] = velocity[2] = 0f;
+            position[0] = position[1] = position[2] = 0f;
+
+            //fill in the acceleration float array
+            acc[0] = Utils.rangeValue(event.values[0], -Constants.MAX_ACC, Constants.MAX_ACC);
+            acc[1] = Utils.rangeValue(event.values[1], -Constants.MAX_ACC, Constants.MAX_ACC);
+            acc[2] = Utils.rangeValue(event.values[2], -Constants.MAX_ACC, Constants.MAX_ACC);
+        }
+
+        //set timestamp to the current time of the sensor reading in nanoseconds
+        timestamp = event.timestamp;
+
+        //set the position of the text based on x and y axis values in position float array
+        layoutSensor.setTranslationX(-position[0]);
+        layoutSensor.setTranslationY(position[1]);
+    }
+
+    private void reset()
+    {
+        position[0] = position[1] = position[2] = 0;
+        velocity[0] = velocity[1] = velocity[2] = 0;
+        timestamp = 0;
+
+        layoutSensor.setTranslationX(0);
+        layoutSensor.setTranslationY(0);
+    }
 
     public void startTimer() {
         //set a new Timer
@@ -212,7 +297,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         timer.schedule(timerTask, 0, 4000);
     }
 
-    public void stoptimertask() {
+    public void stopTimerTask() {
         //stop the timer, if it's not already null
         if (timer != null) {
             timer.cancel();
@@ -220,30 +305,24 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         }
     }
 
+
+    //this is a function to initialize the timertask with a specific runnable/action to do
     public void initializeTimerTask() {
+        //instantiate a new timertask
         timerTask = new TimerTask() {
             public void run() {
-
                 //use a handler to run a toast that shows the current timestamp
-                handler.post(new Runnable() {
+                handler.post(new Runnable() { //post it to be run immediately by Looper
                     public void run() {
                         //reset the clock
                         startTime = System.currentTimeMillis();
-
-                        if (circular_buf_full()) {
-                            //show a toast
-                            Toast.makeText(getApplicationContext(), String.format("%f", aggregate_last_n_entries(15)), Toast.LENGTH_SHORT).show();
-                            //Toast.makeText(getApplicationContext(), "fuk", Toast.LENGTH_SHORT).show();
-                        }
-                        times=0;
-                        //clear out the acceleration buffer
-                        //buffer1.clear();
                     }
                 });
             }
         };
     }
 
+    //check to see if accelerometer is connected; print out the sensors found via Toasts
     public int checkAccelerometer() {
         List<Sensor> sensors = sensorManager.getSensorList(Sensor.TYPE_ACCELEROMETER);
 
@@ -266,10 +345,11 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         //plug in t to the system impulse response equation
         HofT = Math.pow(timeElapsed*e, (-1*timeElapsed*Math.sqrt(spring_const)));
-        //Log.d("TIME", String.format("%f", timeElapsed));
-        Log.d("H VALUE", String.format("%f", HofT));
 
-        times++;
+        //Log.d("TIME", String.format("%f", timeElapsed));
+        //Log.d("H VALUE", String.format("%f", HofT));
+
+        //get the accelerometer readings (3 axes)
         float[] values = event.values;
 
         //use low-pass filter to affect the gravity readings slightly based on what they were before
@@ -277,8 +357,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         gravity[1] = alpha * gravity[1] + (1 - alpha) * event.values[1];
         gravity[2] = alpha * gravity[2] + (1 - alpha) * event.values[2];
 
-
-        // Movement
+        //subtract the gravity affect from the actual accelerometer reading on each axis
         float x = values[0]-gravity[0];
         float y = values[1]-gravity[1];
         float z = values[2]-gravity[2];
@@ -288,12 +367,15 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         //calculate Y(t) using H(t) and inverse of acceleration
         YofT = -1 * x * HofT;
-        Log.d("Y of T", String.format("%f", YofT));
 
+        //Log.d("Y of T", String.format("%f", YofT));
+
+        //calculate how much the acceleration changed from what it was before
         deltaX = x - accelBuffer[0];
         deltaY = y - accelBuffer[1];
         deltaZ = z - accelBuffer[2];
 
+        //calculate overall acceleration vector
         float accelSqRt = (x * x + y * y + z * z) / (SensorManager.GRAVITY_EARTH * SensorManager.GRAVITY_EARTH);
 
         ((TextView) findViewById(R.id.x_axis)).setText(String.format("X accel: %f", x));
@@ -301,22 +383,25 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         ((TextView) findViewById(R.id.z_axis)).setText(String.format("Z accel: %f", z));
         ((TextView) findViewById(R.id.overall)).setText(String.format("Overall: %f", accelSqRt));
 
+        //this is the time the event occurred in nanoseconds
         long actualTime = event.timestamp;
 
-        if (aggregate_last_n_entries(15) >= 1.2) {
-            Toast.makeText(MainActivity.this, "Device shaken.", Toast.LENGTH_SHORT).show();
-        }
+        Log.d("STAMP", String.format("%d", actualTime));
 
         TextView view = (TextView) findViewById(R.id.movable_text);
 
         //update position of text based on acceleration
         RelativeLayout.LayoutParams layoutParams = (RelativeLayout.LayoutParams) view.getLayoutParams();
 
-        layoutParams.leftMargin+=yFactor * YofT;
-        layoutParams.topMargin+=yFactor * YofT;
-        layoutParams.rightMargin = -250;
-        layoutParams.bottomMargin = -250;
-        view.setLayoutParams(layoutParams);
-        view.invalidate();
+        if (aggregate_last_n_entries(15) >= 1.0) {
+            Log.d("SHAKER", "Device shaken");
+            startTime = System.currentTimeMillis();
+            layoutParams.leftMargin+=yFactor * YofT;
+            layoutParams.topMargin+=yFactor * YofT;
+            layoutParams.rightMargin = -250;
+            layoutParams.bottomMargin = -250;
+            view.setLayoutParams(layoutParams);
+            view.invalidate();
+        }
     }
 }
