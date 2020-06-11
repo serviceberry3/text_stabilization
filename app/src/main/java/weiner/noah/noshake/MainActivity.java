@@ -22,6 +22,7 @@ import java.util.List;
 import weiner.noah.NaiveConstants;
 import weiner.noah.NoShakeConstants;
 import weiner.noah.utils.Utils;
+import weiner.noah.ctojavaconnector.*;
 
 
 public class MainActivity extends AppCompatActivity implements SensorEventListener, View.OnTouchListener {
@@ -83,39 +84,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         System.loadLibrary("circ_buffer");
     }
 
-    //JAVA C++ INTERFACE FUNCTION PROTOTYPES
-    private native void circular_buffer(long sz);
-
-    //reset the circular buffer to empty, head == tail
-    private native void circular_buf_reset();
-
-    private native void retreat_pointer();
-
-    private native void advance_pointer();
-
-    //add data to the queue; old data is overwritten if buffer is full
-    private native void circular_buf_put(float data);
-
-    //retrieve a value from the buffer
-    //returns 0 on success, -1 if the buffer is empty
-    private native float circular_buf_get();
-
-    //returns true if the buffer is empty
-    private native boolean circular_buf_empty();
-
-    //returns true if the buffer is full
-    private native boolean circular_buf_full();
-
-    //returns the maximum capacity of the buffer
-    private native long circular_buf_capacity();
-
-    //returns the current number of elements in the buffer
-    private native long circular_buf_size();
-
-    private native float aggregate_last_n_entries(int n);
-
-    //private native void impulse_response_arr_populate(float spring_const);
-
     //thread that writes data to the circular buffer
     class getDataWriteBuffer implements Runnable {
         float xAccel;
@@ -126,7 +94,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         @Override
         public void run() {
-            circular_buf_put(xAccel);
+            CircBuffer.circular_buf_put(xAccel);
         }
     }
 
@@ -135,7 +103,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         @Override
         public void run() {
             while(true) {
-                if (aggregate_last_n_entries(10) >= NoShakeConstants.shaking_threshold) {
+                if (CircBuffer.aggregate_last_n_entries(10) >= NoShakeConstants.shaking_threshold) {
                     shaking = 1;
                     Log.d("TAG", "Device shaking set");
                 }
@@ -164,10 +132,16 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         int width = displayMetrics.widthPixels;
 
         //initialize a circular buffer of 85 floats
-        circular_buffer(85);
+        CircBuffer.circular_buffer(85);
+
+        //initialize an impulse response array also of size 85
+        ImpulseResponse.impulse_resp_arr(85, NoShakeConstants.e, NoShakeConstants.spring_const);
 
         //populate the H(t) impulse response array in C++ based on the selected spring constant
-        //impulse_response_arr_populate(NoShakeConstants.spring_const);
+        ImpulseResponse.impulse_response_arr_populate();
+
+        //instantiate a convolver which has a pointer to both the circular buffer and the impulse response array
+        Convolve.convolver();
 
         //immediately start a looping thread that constantly reads the last 15 data and sets the "shaking" flag accordingly
         detectShaking shakeListener = new detectShaking();
@@ -240,10 +214,10 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             //layoutSensor.setVisibility(View.INVISIBLE);
 
             //noShake implementation
-            //noShake中林(event);
+            noShake中林(event);
 
             //more naive implementation
-            naivePhysicsImplementation(event);
+            //naivePhysicsImplementation(event);
         }
     }
 
@@ -364,9 +338,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         gravity[2] = NoShakeConstants.alpha * gravity[2] + (1 - NoShakeConstants.alpha) * event.values[2];
          */
 
-        //calculate Y(t) using H(t) and acceleration as specified in the paper
-        YofT = Sacc[0] * HofT;
-
         //Log.d("Y of T", String.format("%f", YofT));
 
         /*
@@ -392,6 +363,11 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         //this is a check to see whether the device is shaking
         if (shaking==1) { //empirically-determined threshold in order to keep text still when not really shaking
             startTime = System.currentTimeMillis();
+
+            //convolve the circular buffer of acceleration data with the impulse response array to get Y(t) array
+            Convolve.convolve();
+
+            //start a thread to read out Y(t) array and play it on the screen;
 
             float toMoveX = Utils.rangeValue((float)(NoShakeConstants.yFactor * YofT), -NaiveConstants.MAX_POS_SHIFT, NaiveConstants.MAX_POS_SHIFT);
 

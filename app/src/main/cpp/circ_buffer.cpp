@@ -127,47 +127,47 @@ size_t circular_buffer::circular_buf_size() {
 
 //java interface functions
 extern "C" {
-    JNIEXPORT void Java_weiner_noah_noshake_MainActivity_circular_1buffer(JNIEnv *javaEnvironment, jobject __unused obj, jlong sz) {
+    JNIEXPORT void Java_weiner_noah_ctojavaconnector_CircBuffer_circular_1buffer(JNIEnv *javaEnvironment, jclass obj, jlong sz) {
         buff = new circular_buffer((size_t) sz);
     }
 
-    JNIEXPORT void Java_weiner_noah_noshake_MainActivity_circular_1buf_1reset(JNIEnv* __unused javaEnvironment, jobject __unused obj) {
+    JNIEXPORT void Java_weiner_noah_ctojavaconnector_CircBuffer_circular_1buf_1reset(JNIEnv* __unused javaEnvironment, jclass __unused obj) {
         buff->circular_buf_reset();
     }
 
-    JNIEXPORT void Java_weiner_noah_noshake_MainActivity_circular_1buf_1put(JNIEnv* __unused javaEnvironment, jobject __unused obj, jfloat data) {
+    JNIEXPORT void Java_weiner_noah_ctojavaconnector_CircBuffer_circular_1buf_1put(JNIEnv* __unused javaEnvironment, jclass __unused obj, jfloat data) {
         buff->circular_buf_put(data);
     }
 
-    JNIEXPORT jfloat Java_weiner_noah_noshake_MainActivity_circular_1buf_1get(JNIEnv* __unused javaEnvironment, jobject __unused obj) {
+    JNIEXPORT jfloat Java_weiner_noah_ctojavaconnector_CircBuffer_circular_1buf_1get(JNIEnv* __unused javaEnvironment, jclass __unused obj) {
         return buff->circular_buf_get();
     }
 
-    JNIEXPORT void Java_weiner_noah_noshake_MainActivity_retreat_1pointer(JNIEnv* __unused javaEnvironment, jobject __unused obj) {
+    JNIEXPORT void Java_weiner_noah_ctojavaconnector_CircBuffer_retreat_1pointer(JNIEnv* __unused javaEnvironment, jclass __unused obj) {
         buff->retreat_pointer();
     }
 
-    JNIEXPORT void Java_weiner_noah_noshake_MainActivity_advance_1pointer(JNIEnv* __unused javaEnvironment, jobject __unused obj) {
+    JNIEXPORT void Java_weiner_noah_ctojavaconnector_CircBuffer_advance_1pointer(JNIEnv* __unused javaEnvironment, jclass __unused obj) {
         buff->advance_pointer();
     }
 
-    JNIEXPORT jboolean Java_weiner_noah_noshake_MainActivity_circular_1buf_1empty(JNIEnv* __unused javaEnvironment, jobject __unused obj) {
+    JNIEXPORT jboolean Java_weiner_noah_ctojavaconnector_CircBuffer_circular_1buf_1empty(JNIEnv* __unused javaEnvironment, jclass __unused obj) {
         return buff->circular_buf_empty();
     }
 
-    JNIEXPORT jlong Java_weiner_noah_noshake_MainActivity_circular_1buf_1size(JNIEnv* __unused javaEnvironment, jobject __unused obj) {
+    JNIEXPORT jlong Java_weiner_noah_ctojavaconnector_CircBuffer_circular_1buf_1size(JNIEnv* __unused javaEnvironment, jclass __unused obj) {
         return buff->circular_buf_size();
     }
 
-    JNIEXPORT jfloat Java_weiner_noah_noshake_MainActivity_aggregate_1last_1n_1entries(JNIEnv* __unused javaEnvironment, jobject __unused obj, jint n) {
+    JNIEXPORT jfloat Java_weiner_noah_ctojavaconnector_CircBuffer_aggregate_1last_1n_1entries(JNIEnv* __unused javaEnvironment, jclass __unused obj, jint n) {
         return buff->aggregate_last_n_entries(n);
     }
 
-    JNIEXPORT jboolean Java_weiner_noah_noshake_MainActivity_circular_1buf_1full(JNIEnv* __unused javaEnvironment, jobject __unused obj) {
+    JNIEXPORT jboolean Java_weiner_noah_ctojavaconnector_CircBuffer_circular_1buf_1full(JNIEnv* __unused javaEnvironment, jclass __unused obj) {
         return buff->circular_buf_full();
     }
 
-    JNIEXPORT jlong Java_weiner_noah_noshake_MainActivity_circular_1buf_1capacity(JNIEnv* __unused javaEnvironment, jobject __unused obj) {
+    JNIEXPORT jlong Java_weiner_noah_ctojavaconnector_CircBuffer_circular_1buf_1capacity(JNIEnv* __unused javaEnvironment, jclass __unused obj) {
         return buff->circular_buf_full();
     }
 }

@@ -5,8 +5,16 @@
 static convolver* ySignalConvolver = NULL;
 
 convolver::convolver() {
-    //xArray = buff->buffer;
-    //hArray = impulseResponses->responseArray;
+    xArray = buff->buffer;
+    xLength = buff->circular_buf_size();
+
+    hArray = impulseResponses->responseArray;
+    hLength = impulseResponses->size;
+
+    yLength = xLength + hLength - 1;
+
+    //allocated appropriately sized float array for the output signal (m+n-1)
+    yArray = (float*) memalign(16, sizeof(float)* yLength);
 }
 
 convolver::~convolver() {
@@ -32,5 +40,15 @@ void convolver::convolve() {
         {
             yArray[i] += xArray[j] * hArray[i-j];
         }
+    }
+}
+
+extern "C" {
+    JNIEXPORT void Java_weiner_noah_ctojavaconnector_Convolve_convolver(JNIEnv *javaEnvironment, jclass __unused obj) {
+        ySignalConvolver = new convolver();
+    }
+
+    JNIEXPORT void Java_weiner_noah_ctojavaconnector_Convolve_convolve(JNIEnv *javaEnvironment, jclass __unused obj) {
+        ySignalConvolver->convolve();
     }
 }

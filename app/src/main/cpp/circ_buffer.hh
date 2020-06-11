@@ -58,7 +58,6 @@ private:
     bool full;
 };
 
-
 //a circular buffer instance
 static circular_buffer* buff = NULL;
 
