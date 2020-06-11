@@ -1,3 +1,6 @@
+#ifndef NOSHAKE_CIRC_BUFFER_HH
+#define NOSHAKE_CIRC_BUFFER_HH
+
 #include <jni.h>
 #include <stdio.h>
 #include <stdbool.h>
@@ -52,6 +55,8 @@ private:
     size_t max; //maximum size of the buffer
     bool full;
 };
+
+#endif //NOSHAKE_CIRC_BUFFER_HH
 
 
 

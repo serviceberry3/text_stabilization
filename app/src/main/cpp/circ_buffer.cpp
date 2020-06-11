@@ -171,7 +171,6 @@ extern "C" {
     JNIEXPORT jlong Java_weiner_noah_noshake_MainActivity_circular_1buf_1capacity(JNIEnv* __unused javaEnvironment, jobject __unused obj) {
         return buff->circular_buf_full();
     }
-
 }
 
 

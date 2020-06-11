@@ -114,6 +114,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     private native float aggregate_last_n_entries(int n);
 
+    private native void impulse_response_arr_populate(float spring_const);
+
     //thread that writes data to the circular buffer
     class getDataWriteBuffer implements Runnable {
         float xAccel;
@@ -163,6 +165,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         //initialize a circular buffer of 85 floats
         circular_buffer(85);
+
+        //populate the H(t) impulse response array in C++ based on the selected spring constant
+        impulse_response_arr_populate(NoShakeConstants.spring_const);
 
         //immediately start a looping thread that constantly reads the last 15 data and sets the "shaking" flag accordingly
         detectShaking shakeListener = new detectShaking();
