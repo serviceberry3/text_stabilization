@@ -1,7 +1,6 @@
 #include "circ_buffer.hh"
 
-//a circular buffer instance
-static circular_buffer* buff = NULL;
+float* circular_buffer::buffer = NULL;
 
 circular_buffer::circular_buffer(size_t sz) {
     buffer = (float*) memalign(16, sizeof(float)*sz);
@@ -49,7 +48,7 @@ size_t circular_buffer::circular_buf_get_head() {
 }
 
 size_t circular_buffer::circular_buf_capacity() {
-
+    return max;
 }
 
 //advance the queue head (used after adding data), and possibly advance the tail if the buffer is already full
@@ -156,7 +155,7 @@ extern "C" {
         return buff->circular_buf_empty();
     }
 
-    JNIEXPORT jsize Java_weiner_noah_noshake_MainActivity_circular_1buf_1size(JNIEnv* __unused javaEnvironment, jobject __unused obj) {
+    JNIEXPORT jlong Java_weiner_noah_noshake_MainActivity_circular_1buf_1size(JNIEnv* __unused javaEnvironment, jobject __unused obj) {
         return buff->circular_buf_size();
     }
 

@@ -1,27 +1,36 @@
 #include "convolve.hh"
+#include "circ_buffer.hh"
+#include "impulse_response.hh"
 
-int x[15],h[15],y[15];
+static convolver* ySignalConvolver = NULL;
 
-int convolve (void)
-{
-    int i,j,m,n;
+convolver::convolver() {
+    //xArray = buff->buffer;
+    //hArray = impulseResponses->responseArray;
+}
 
-    // padding of zeroes
-    for (i = m; i <= m + n - 1; i++)
-        x[i] = 0;
+convolver::~convolver() {
+    free(hArray);
+    free(xArray);
+    free(yArray);
+}
 
-    for (i = n; i <= m + n - 1; i++)
-        h[i] = 0;
+void convolver::convolve() {
+    // padding of zeroes in the output array
+    for (int i = xLength; i <= xLength + hLength - 1; i++)
+        xArray[i] = 0;
+
+    for (int i = hLength; i <= xLength + hLength - 1; i++)
+        hArray[i] = 0;
 
     // convolution operation
-    for (i = 0; i < m + n - 1; i++)
+    for (int i = 0; i < xLength + hLength - 1; i++)
     {
-        y[i]=0;
+        yArray[i]=0;
 
-        for (j=0; j<=i; j++)
+        for (int j = 0; j <= i; j++)
         {
-            y[i] += x[j] * h[i-j];
+            yArray[i] += xArray[j] * hArray[i-j];
         }
     }
-
 }

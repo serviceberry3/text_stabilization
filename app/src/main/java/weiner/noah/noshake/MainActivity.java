@@ -114,7 +114,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     private native float aggregate_last_n_entries(int n);
 
-    private native void impulse_response_arr_populate(float spring_const);
+    //private native void impulse_response_arr_populate(float spring_const);
 
     //thread that writes data to the circular buffer
     class getDataWriteBuffer implements Runnable {
@@ -167,7 +167,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         circular_buffer(85);
 
         //populate the H(t) impulse response array in C++ based on the selected spring constant
-        impulse_response_arr_populate(NoShakeConstants.spring_const);
+        //impulse_response_arr_populate(NoShakeConstants.spring_const);
 
         //immediately start a looping thread that constantly reads the last 15 data and sets the "shaking" flag accordingly
         detectShaking shakeListener = new detectShaking();
@@ -240,10 +240,10 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             //layoutSensor.setVisibility(View.INVISIBLE);
 
             //noShake implementation
-            noShake中林(event);
+            //noShake中林(event);
 
             //more naive implementation
-            //naivePhysicsImplementation(event);
+            naivePhysicsImplementation(event);
         }
     }
 
@@ -347,7 +347,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         Utils.lowPassFilter(StempAcc, Sacc, NaiveConstants.LOW_PASS_ALPHA_DEFAULT);
 
         //plug in t to the system impulse response equation
-        HofT = Math.pow(timeElapsed * NoShakeConstants.e, (-.1*timeElapsed*Math.sqrt(NoShakeConstants.spring_const)));
+        HofT = timeElapsed * Math.pow(NoShakeConstants.e, (-.1*timeElapsed*Math.sqrt(NoShakeConstants.spring_const)));
 
         //to speed things up, start a separate thread to go write the acceleration data to the buffer while we finish calculations here
         getDataWriteBuffer writerThread = new getDataWriteBuffer(Sacc[0]);
