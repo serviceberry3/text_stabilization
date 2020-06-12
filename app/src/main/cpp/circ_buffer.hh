@@ -24,7 +24,7 @@ public:
 
     //put version 1 continues to add data if the buffer is full
     //old data is overwritten
-    void circular_buf_put(float data);
+    int circular_buf_put(float data);
 
     //retrieve a value from the buffer
     //returns 0 on success, -1 if the buffer is empty
@@ -46,13 +46,13 @@ public:
     float aggregate_last_n_entries(int n);
 
     //retrieve the head position of the circular buffer
-    size_t circular_buf_get_head();
+    static size_t circular_buf_get_head();
 
-    //public static property buffer so it can be used by the convolver
+    //public static properties so they can be used by the convolver
     static float* buffer;
+    static size_t head;
 
 private:
-    size_t head;
     size_t tail;
     size_t max; //maximum size of the buffer
     bool full;

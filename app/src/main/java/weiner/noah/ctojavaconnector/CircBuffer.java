@@ -12,7 +12,7 @@ public class CircBuffer {
     public static native void advance_pointer();
 
     //add data to the queue; old data is overwritten if buffer is full
-    public static native void circular_buf_put(float data);
+    public static native int circular_buf_put(float data);
 
     //retrieve a value from the buffer
     //returns 0 on success, -1 if the buffer is empty
@@ -31,4 +31,6 @@ public class CircBuffer {
     public static native long circular_buf_size();
 
     public static native float aggregate_last_n_entries(int n);
+
+    public static native int circular_buf_get_head();
 }

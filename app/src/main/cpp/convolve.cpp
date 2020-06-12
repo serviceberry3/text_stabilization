@@ -6,7 +6,8 @@ static convolver* ySignalConvolver = NULL;
 
 convolver::convolver() {
     xArray = buff->buffer;
-    xLength = buff->circular_buf_size();
+    //xLength = buff->circular_buf_size();
+    xLength = 211;
 
     hArray = impulseResponses->responseArray;
     hLength = impulseResponses->size;
@@ -23,24 +24,50 @@ convolver::~convolver() {
     free(yArray);
 }
 
-void convolver::convolve() {
-    // padding of zeroes in the output array
-    for (int i = xLength; i <= xLength + hLength - 1; i++)
-        xArray[i] = 0;
+float convolver::convolve() {
+    float* tempHArray = (float*) calloc(yLength, sizeof(float));
+    memcpy(tempHArray, hArray, hLength);
 
-    for (int i = hLength; i <= xLength + hLength - 1; i++)
-        hArray[i] = 0;
+    tempXArray = (float*) calloc(yLength, sizeof(float));
+
+    int currHead = buff->head;
+
+    //we want to order the data from the circular buffer from oldest to newest, using the head as the break point
+    memcpy(tempXArray, xArray + currHead, sizeof(float) * (xLength-currHead));
+    memcpy(tempXArray + (xLength-currHead), xArray, sizeof(float) * currHead);
 
     // convolution operation
-    for (int i = 0; i < xLength + hLength - 1; i++)
+    for (int i = 0; i < yLength; i++)
     {
         yArray[i]=0;
 
         for (int j = 0; j <= i; j++)
         {
-            yArray[i] += xArray[j] * hArray[i-j];
+            yArray[i] += (tempXArray[j] * -1) * tempHArray[i-j];
         }
     }
+
+    return tempXArray[84];
+}
+
+float convolver::getTempXMember(int index) {
+    return tempXArray[index];
+}
+
+float convolver::getYMember(int index) {
+    return yArray[index];
+}
+
+float convolver::getHMember(int index) {
+    return hArray[index];
+}
+
+float convolver::getXMember(int index) {
+    return xArray[index];
+}
+
+size_t convolver::getYSize() {
+    return yLength;
 }
 
 extern "C" {
@@ -48,7 +75,27 @@ extern "C" {
         ySignalConvolver = new convolver();
     }
 
-    JNIEXPORT void Java_weiner_noah_ctojavaconnector_Convolve_convolve(JNIEnv *javaEnvironment, jclass __unused obj) {
-        ySignalConvolver->convolve();
+    JNIEXPORT jfloat Java_weiner_noah_ctojavaconnector_Convolve_convolve(JNIEnv *javaEnvironment, jclass __unused obj) {
+        return ySignalConvolver->convolve();
+    }
+
+    JNIEXPORT jfloat Java_weiner_noah_ctojavaconnector_Convolve_getYMember(JNIEnv *javaEnvironment, jclass __unused obj, jint index) {
+        return ySignalConvolver->getYMember(index);
+    }
+
+    JNIEXPORT jfloat Java_weiner_noah_ctojavaconnector_Convolve_getHMember(JNIEnv *javaEnvironment, jclass __unused obj, jint index) {
+        return ySignalConvolver->getHMember(index);
+    }
+
+    JNIEXPORT jfloat Java_weiner_noah_ctojavaconnector_Convolve_getXMember(JNIEnv *javaEnvironment, jclass __unused obj, jint index) {
+        return ySignalConvolver->getXMember(index);
+    }
+
+    JNIEXPORT jlong Java_weiner_noah_ctojavaconnector_Convolve_getYSize(JNIEnv *javaEnvironment, jclass __unused obj) {
+        return ySignalConvolver->getYSize();
+    }
+
+    JNIEXPORT jlong Java_weiner_noah_ctojavaconnector_Convolve_getTempXMember(JNIEnv *javaEnvironment, jclass __unused obj, jint index) {
+        return ySignalConvolver->getTempXMember(index);
     }
 }

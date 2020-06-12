@@ -1,6 +1,7 @@
 #include "circ_buffer.hh"
 
 float* circular_buffer::buffer = NULL;
+size_t circular_buffer::head;
 
 circular_buffer::circular_buffer(size_t sz) {
     buffer = (float*) memalign(16, sizeof(float)*sz);
@@ -19,9 +20,10 @@ void circular_buffer::circular_buf_reset() {
     full=false;
 }
 
-void circular_buffer::circular_buf_put(float data) {
+int circular_buffer::circular_buf_put(float data) {
     buffer[head] = data;
     advance_pointer();
+    return head;
 }
 
 //get one member from the queue--namely, the FIRST-IN data that's currently located at the tail position
@@ -53,7 +55,7 @@ size_t circular_buffer::circular_buf_capacity() {
 
 //advance the queue head (used after adding data), and possibly advance the tail if the buffer is already full
 void circular_buffer::advance_pointer() {
-    //if the buffer is full (head=tail), we need to throw out the the FIRST-IN data by advancing the tail as well (it's a FIFO queue)
+    //if the buffer is full (head=tail), we need to throw OUT the the FIRST-IN data by advancing the tail as well (it's a FIFO queue)
     if (full) {
         tail = (tail+1) % max;
     }
@@ -135,8 +137,8 @@ extern "C" {
         buff->circular_buf_reset();
     }
 
-    JNIEXPORT void Java_weiner_noah_ctojavaconnector_CircBuffer_circular_1buf_1put(JNIEnv* __unused javaEnvironment, jclass __unused obj, jfloat data) {
-        buff->circular_buf_put(data);
+    JNIEXPORT jint Java_weiner_noah_ctojavaconnector_CircBuffer_circular_1buf_1put(JNIEnv* __unused javaEnvironment, jclass __unused obj, jfloat data) {
+        return buff->circular_buf_put(data);
     }
 
     JNIEXPORT jfloat Java_weiner_noah_ctojavaconnector_CircBuffer_circular_1buf_1get(JNIEnv* __unused javaEnvironment, jclass __unused obj) {
@@ -169,6 +171,10 @@ extern "C" {
 
     JNIEXPORT jlong Java_weiner_noah_ctojavaconnector_CircBuffer_circular_1buf_1capacity(JNIEnv* __unused javaEnvironment, jclass __unused obj) {
         return buff->circular_buf_full();
+    }
+
+    JNIEXPORT jlong Java_weiner_noah_ctojavaconnector_CircBuffer_circular_1buf_1get_1head(JNIEnv* __unused javaEnvironment, jclass __unused obj) {
+        return buff->head;
     }
 }
 

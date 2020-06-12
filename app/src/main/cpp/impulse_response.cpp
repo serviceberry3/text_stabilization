@@ -21,10 +21,12 @@ impulse_resp_arr::~impulse_resp_arr() {
 void impulse_resp_arr::impulse_response_arr_populate() {
     //divide 4.0 seconds by the size of the array
     float timeIncrement = 4.0f/size;
+    float sqrtK = sqrt(kValue);
 
     for (int i=0; i<size; i++) {
+        float currTime = timeIncrement * i;
         //fill in this spot in the array with the appropriate H(t) value
-        responseArray[i] = ((float)(timeIncrement * i) * pow(eValue, -timeIncrement * sqrtf(kValue)));
+        responseArray[i] = ((float)(currTime) * pow(eValue, -currTime * sqrtK));
     }
 }
 
