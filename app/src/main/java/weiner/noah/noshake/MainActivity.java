@@ -108,6 +108,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         @Override
         public void run() {
             while (true) {
+                Log.d("DBUG", "Running thread");
                 //Log.d("HEAD", String.format("Head is %d", CircBuffer.circular_buf_get_head()));
                 float aggregation = CircBuffer.aggregate_last_n_entries(50);
                 Log.d("AVERAGE", String.format("%f", aggregation));

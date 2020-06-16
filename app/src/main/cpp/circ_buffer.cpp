@@ -105,6 +105,9 @@ float circular_buffer::aggregate_last_n_entries(int n) {
         if (i < 0) {
             //change i to the correct index of the buffer
             i = (int) max + i;
+            if (i==cutoff) {
+                return average / (float)n;
+            }
         }
 
         //add absolute value acceleration reading the the average
