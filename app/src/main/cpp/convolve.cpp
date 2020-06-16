@@ -14,8 +14,8 @@ convolver::convolver() {
 
     yLength = xLength + hLength - 1;
 
-    //allocated appropriately sized float array for the output signal (m+n-1)
-    yArray = (float*) memalign(16, sizeof(float)* yLength);
+    //allocated appropriately sized float array for the output signal (m+n-1), set entire array to 0 to begin accumulation
+    yArray = (float*) calloc(sizeof(float), yLength);
 }
 
 convolver::~convolver() {
@@ -25,10 +25,11 @@ convolver::~convolver() {
 }
 
 float convolver::convolve() {
+    /*
     float* tempHArray = (float*) calloc(yLength, sizeof(float));
     memcpy(tempHArray, hArray, hLength);
-
-    tempXArray = (float*) calloc(yLength, sizeof(float));
+*/
+    tempXArray = (float*) malloc(sizeof(float) * xLength);
 
     int currHead = buff->head;
 
@@ -37,13 +38,11 @@ float convolver::convolve() {
     memcpy(tempXArray + (xLength-currHead), xArray, sizeof(float) * currHead);
 
     // convolution operation
-    for (int i = 0; i < yLength; i++)
+    for (int i = 0; i < xLength; i++)
     {
-        yArray[i]=0;
-
-        for (int j = 0; j <= i; j++)
+        for (int j = 0; j < hLength; j++)
         {
-            yArray[i] += (tempXArray[j] * -1) * tempHArray[i-j];
+            yArray[i+j] += tempXArray[i] * hArray[j];
         }
     }
 

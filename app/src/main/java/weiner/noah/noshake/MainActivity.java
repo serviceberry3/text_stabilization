@@ -77,7 +77,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private float deltaX, deltaY, deltaZ;
 
     //is the device shaking??
-    private int shaking=0;
+    private volatile int shaking = 0;
 
     private int index=0, check=0, times=0;
 
@@ -107,12 +107,18 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     class detectShaking implements Runnable {
         @Override
         public void run() {
-            while(true) {
-                if (CircBuffer.aggregate_last_n_entries(10) >= NoShakeConstants.shaking_threshold) {
-                    shaking = 1;
+            while (true) {
+                //Log.d("HEAD", String.format("Head is %d", CircBuffer.circular_buf_get_head()));
+                float aggregation = CircBuffer.aggregate_last_n_entries(50);
+                Log.d("AVERAGE", String.format("%f", aggregation));
+                if (aggregation >= 0) {
+                    if (aggregation >= NoShakeConstants.shaking_threshold) {
+                        shaking = 1;
+                    }
+                    else {
+                        shaking = 0;
+                    }
                 }
-                else
-                    shaking = 0;
             }
         }
     }
@@ -149,10 +155,10 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         int height = displayMetrics.heightPixels;
         int width = displayMetrics.widthPixels;
 
-        //initialize a circular buffer of 85 floats
+        //initialize a circular buffer of 211 floats
         CircBuffer.circular_buffer(NoShakeConstants.buffer_size);
 
-        //initialize an impulse response array also of size 85
+        //initialize an impulse response array also of size 211
         ImpulseResponse.impulse_resp_arr(NoShakeConstants.buffer_size, NoShakeConstants.e, NoShakeConstants.spring_const);
 
         //populate the H(t) impulse response array in C++ based on the selected spring constant
@@ -161,7 +167,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         //instantiate a convolver which has a pointer to both the circular buffer and the impulse response array
         Convolve.convolver();
 
-        //immediately start a looping thread that constantly reads the last 15 data and sets the "shaking" flag accordingly
+        //immediately start a looping thread that constantly reads the last 50 data and sets the "shaking" flag accordingly
         detectShaking shakeListener = new detectShaking();
         new Thread(shakeListener).start();
 
@@ -333,6 +339,15 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     //implementation of LZ's NoShake version
     private void noShake中林(SensorEvent event) {
+        //indicate whether or not circular buffer is full
+        /*
+        if (CircBuffer.circular_buf_full()) {
+            Log.d("FULLCHECK", "Full");
+        }
+
+         */
+        //Log.d("SIZES", String.format("Size %d vs capacity %d", CircBuffer.circular_buf_size(), CircBuffer.circular_buf_capacity()));
+
         times++;
 
         timeElapsed = (System.currentTimeMillis() - startTime)/1000;
@@ -341,7 +356,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         Utils.lowPassFilter(StempAcc, Sacc, NaiveConstants.LOW_PASS_ALPHA_DEFAULT);
 
         //plug in t to the system impulse response equation
-        HofT = timeElapsed * Math.pow(NoShakeConstants.e, (-.1*timeElapsed*Math.sqrt(NoShakeConstants.spring_const)));
+        HofT = timeElapsed * Math.pow(NoShakeConstants.e, (-1*timeElapsed*Math.sqrt(NoShakeConstants.spring_const)));
 
         /*
         //to speed things up, start a separate thread to go write the acceleration data to the buffer while we finish calculations here
@@ -351,13 +366,14 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
          */
 
 
+        //Log.d("READINg", String.format("%f", Sacc[0]));
         int h = CircBuffer.circular_buf_put(Sacc[0]);
 
 
         if (check==1) {
             float yReading = Convolve.getYMember(index++);
             ((TextView) findViewById(R.id.overall)).setText(String.format("YARRAY: %f", yReading));
-            layoutSensor.setTranslationX(yReading * NoShakeConstants.yFactor);
+            layoutSensor.setTranslationX(-1 * yReading * NoShakeConstants.yFactor);
             if (index==421) {
                 check=5;
             }
@@ -407,6 +423,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         //this is a check to see whether the device is shaking
         if (shaking==1 && check==0) { //empirically-determined threshold in order to keep text still when not really shaking
+            Log.d("HEAD", String.format("Head is %d", CircBuffer.circular_buf_get_head()));
             check=1;
 
             if (outputPlayerThread!=null) {

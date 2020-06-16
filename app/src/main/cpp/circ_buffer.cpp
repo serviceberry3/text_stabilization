@@ -84,26 +84,35 @@ float circular_buffer::aggregate_last_n_entries(int n) {
 
     //make sure the requested n is not greater than the current population of the queue
     size_t size = circular_buf_size();
-    if (n>size) {
+    if (n > size) {
         return -1;
     }
 
     //initialize an average
-    float average=0;
+    float average = 0;
 
     //find the head of the queue as an integer
-    int position = (int) head;
+    int position = (int) head - 1;
+
+    int cutoff = position - n;
+    if (cutoff < 0) {
+        cutoff = (int) max + cutoff;
+    }
 
     //run back n spaces in the queue, adding all entries to the average
-    for (int i=position; i>=position-n; i--) {
-        //i cannot become negative as long as we checked that the requested n is <= current number of items in the queue
+    for (int i = position; i != cutoff; i--) {
+        //i could become negative if the head was at a low number, so need to correct that
+        if (i < 0) {
+            //change i to the correct index of the buffer
+            i = (int) max + i;
+        }
 
         //add absolute value acceleration reading the the average
-        average+=abs(buffer[i]);
+        average += abs(buffer[i]);
     }
 
     //divide average by number of elements read to get aggregate reading
-    return average/(float)n;
+    return average / (float)n;
 }
 
 size_t circular_buffer::circular_buf_size() {
@@ -118,7 +127,8 @@ size_t circular_buffer::circular_buf_size() {
             size = head - tail;
         }
 
-        //otherwise we've taken out stuff past the head, so the current size is the maximum minus however much has been taken out (space between head and tail)
+        //otherwise we've taken out stuff past the head (which means the buffer was full, so the current size is the maximum minus
+        // however much has been taken out (space between head and tail)
         else
         {
             size = (max + head - tail);
@@ -170,10 +180,10 @@ extern "C" {
     }
 
     JNIEXPORT jlong Java_weiner_noah_ctojavaconnector_CircBuffer_circular_1buf_1capacity(JNIEnv* __unused javaEnvironment, jclass __unused obj) {
-        return buff->circular_buf_full();
+        return buff->circular_buf_capacity();
     }
 
-    JNIEXPORT jlong Java_weiner_noah_ctojavaconnector_CircBuffer_circular_1buf_1get_1head(JNIEnv* __unused javaEnvironment, jclass __unused obj) {
+    JNIEXPORT jint Java_weiner_noah_ctojavaconnector_CircBuffer_circular_1buf_1get_1head(JNIEnv* __unused javaEnvironment, jclass __unused obj) {
         return buff->head;
     }
 }
