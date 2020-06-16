@@ -99,7 +99,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         @Override
         public void run() {
             Log.d("WRITER", String.format("Putting value %f", xAccel));
-            CircBuffer.circular_buf_put(xAccel);
+            CircBuffer.circular_buf_put(xAccel, 0);
         }
     }
 
@@ -110,7 +110,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             while (true) {
                 //Log.d("DBUG", "Running thread");
                 //Log.d("HEAD", String.format("Head is %d", CircBuffer.circular_buf_get_head()));
-                float aggregation = CircBuffer.aggregate_last_n_entries(50);
+                float aggregation = (CircBuffer.aggregate_last_n_entries(50, 0) + CircBuffer.aggregate_last_n_entries(50, 1))/2;
                 //Log.d("AVERAGE", String.format("%f", aggregation));
                 if (aggregation >= 0) {
                     if (aggregation >= NoShakeConstants.shaking_threshold) {
@@ -127,8 +127,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     class ySignalPlayer implements Runnable {
         @Override
         public void run() {
-            if (index < Convolve.getYSize()) {
-                float toMoveX = Convolve.getYMember(index);
+            if (index < Convolve.getYSize(0)) {
+                float toMoveX = Convolve.getYMember(index, 0);
 
                 //adjust text on screen
                 layoutSensor.setTranslationX(toMoveX);
@@ -157,7 +157,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         int width = displayMetrics.widthPixels;
 
         //initialize a circular buffer of 211 floats
-        CircBuffer.circular_buffer(NoShakeConstants.buffer_size);
+        CircBuffer.circular_buffer(NoShakeConstants.buffer_size, 0);
+        CircBuffer.circular_buffer(NoShakeConstants.buffer_size, 1);
 
         //initialize an impulse response array also of size 211
         ImpulseResponse.impulse_resp_arr(NoShakeConstants.buffer_size, NoShakeConstants.e, NoShakeConstants.spring_const);
@@ -167,9 +168,11 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         //store sum of filter
         impulseSum = ImpulseResponse.impulse_response_arr_get_sum();
+        Log.d("DBUG", String.format("Impulse sum is %f", impulseSum));
 
         //instantiate a convolver which has a pointer to both the circular buffer and the impulse response array
-        Convolve.convolver();
+        Convolve.convolver(CircBuffer.circular_buf_address(0), 0);
+        Convolve.convolver(CircBuffer.circular_buf_address(1), 1);
 
         //immediately start a looping thread that constantly reads the last 50 data and sets the "shaking" flag accordingly
         detectShaking shakeListener = new detectShaking();
@@ -242,7 +245,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             //layoutSensor.setVisibility(View.INVISIBLE);
 
             //noShake implementation
-            noShake中林(event);
+            noShake钟林(event);
 
             //more naive implementation
             //naivePhysicsImplementation(event);
@@ -310,7 +313,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         //set the position of the text based on x and y axis values in position float array
         layoutSensor.setTranslationX(-Nposition[0]);
-        layoutSensor.setTranslationY(Nposition[1]);
+        //layoutSensor.setTranslationY(Nposition[1]);
     }
 
     private void reset()
@@ -342,35 +345,20 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     }
 
     //implementation of LZ's NoShake version
-    private void noShake中林(SensorEvent event) {
-        //indicate whether or not circular buffer is full
-        /*
-        if (CircBuffer.circular_buf_full()) {
-            Log.d("FULLCHECK", "Full");
-        }
-
-         */
-        //Log.d("SIZES", String.format("Size %d vs capacity %d", CircBuffer.circular_buf_size(), CircBuffer.circular_buf_capacity()));
-
-        //times++;
-
-        timeElapsed = (System.currentTimeMillis() - startTime)/1000;
-
+    private void noShake钟林(SensorEvent event) {
         StempAcc[0] = Utils.rangeValue(event.values[0], -NaiveConstants.MAX_ACC, NaiveConstants.MAX_ACC);
-        Utils.lowPassFilter(StempAcc, Sacc, NaiveConstants.LOW_PASS_ALPHA_DEFAULT);
+        StempAcc[1] = Utils.rangeValue(event.values[1], -NaiveConstants.MAX_ACC, NaiveConstants.MAX_ACC);
 
-        //plug in t to the system impulse response equation
-        HofT = timeElapsed * Math.pow(NoShakeConstants.e, (-1*timeElapsed*Math.sqrt(NoShakeConstants.spring_const)));
+        Utils.lowPassFilter(StempAcc, Sacc, NaiveConstants.LOW_PASS_ALPHA_DEFAULT);
 
         /*
         //to speed things up, start a separate thread to go write the acceleration data to the buffer while we finish calculations here
         getDataWriteBuffer writerThread = new getDataWriteBuffer(Sacc[0]);
         new Thread(writerThread).start();
-
          */
 
-        int h = CircBuffer.circular_buf_put(Sacc[0]);
-
+        int h = CircBuffer.circular_buf_put(Sacc[0], 0);
+        int l = CircBuffer.circular_buf_put(Sacc[1], 1);
 
 
         /*
@@ -406,7 +394,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         //update the stats on the UI to show the accelerometer readings
         ((TextView) findViewById(R.id.x_axis)).setText(String.format("X accel: %f", Sacc[0]));
-        //((TextView) findViewById(R.id.y_axis)).setText(String.format("Y accel: %f", y));
+        ((TextView) findViewById(R.id.y_axis)).setText(String.format("Y accel: %f", Sacc[1]));
         //((TextView) findViewById(R.id.z_axis)).setText(String.format("Z accel: %f", z));
 
         //get current layout parameters (current position, etc) of the NoShake sample text
@@ -414,52 +402,34 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
 
         //this is a check to see whether the device is shaking
-        if (shaking==1) { //empirically-determined threshold in order to keep text still when not really shaking
+        //if (shaking==1) { //empirically-determined threshold in order to keep text still when not really shaking
             //convolve the circular buffer of acceleration data with the impulse response array to get Y(t) array
-            float f = Convolve.convolve();
+            float f = Convolve.convolve(0);
+            float y = Convolve.convolve(1);
 
-            float ximm = 0;
+            float deltaX = 0;
+            float deltaY = 0;
 
             for (int i=0; i<NoShakeConstants.buffer_size; i++) {
-                ximm += ImpulseResponse.impulse_response_arr_get_value(i) * Convolve.getTempXMember(i);
+                float impulseValue = ImpulseResponse.impulse_response_arr_get_value(i);
+                deltaX += impulseValue * Convolve.getTempXMember(i, 0);
+                deltaY += impulseValue * Convolve.getTempXMember(i, 1);
             }
 
-            ximm /= impulseSum;
-            layoutSensor.setTranslationX(-1 * ximm * NoShakeConstants.yFactor);
+            //normalize the scale of filters with arbitrary length/magnitude
+            deltaX /= impulseSum;
+            deltaY /= impulseSum;
 
+            float toMoveX = -1 * deltaX * NoShakeConstants.yFactor;
+            layoutSensor.setTranslationX(Utils.rangeValue(toMoveX, -NaiveConstants.MAX_POS_SHIFT, NaiveConstants.MAX_POS_SHIFT));
 
-            /*
+            float toMoveY =  deltaY * NoShakeConstants.yFactor;
+            layoutSensor.setTranslationY(toMoveY);
 
-
-            //Log.d("HEAD", String.format("Head is %d", CircBuffer.circular_buf_get_head()));
-            float yReading = Convolve.getYMember(index++);
-            ((TextView) findViewById(R.id.overall)).setText(String.format("YARRAY: %f", yReading));
-            layoutSensor.setTranslationX(-1 * yReading * NoShakeConstants.yFactor);
-            if (index==421) {
-                check=5;
-            }
-
-            startTime = System.currentTimeMillis();
-
-
-             */
-
-            //Log.d("HEAD", String.format("Head at %d, got first float %f", CircBuffer.circular_buf_get_head(), f));
-
-
-            /*
+/*
             //print out convolved signal array on the log
             for (int i=0; i<NoShakeConstants.buffer_size; i++) {
-                Log.d("HARRAY", String.format("Index %d: %f", i, Convolve.getHMember(i)));
-            }
-
-            //print out convolved signal array on the log
-            for (int i=0; i<NoShakeConstants.buffer_size; i++) {
-                Log.d("XARRAY", String.format("Index %d: %f", i, Convolve.getXMember(i)));
-            }
-
-            for (int i=0; i<421; i++) {
-                Log.d("TEMPXARRAY", String.format("Index %d: %f", i, Convolve.getTempXMember(i)));
+                Log.d("XARRAY", String.format("Index %d: %f", i, Convolve.getXMember(i, 0)));
             }
 
 
@@ -468,26 +438,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 Log.d("YARRAY", String.format("Index %d: %f", i, Convolve.getYMember(i)));
             }
 
-             */
-
-            /*
-            while(index!=NoShakeConstants.buffer_size) {
-                float yReading = Convolve.getYMember(index++);
-                ((TextView) findViewById(R.id.overall)).setText(String.format("YARRAY: %f", yReading));
-                layoutSensor.setTranslationX(yReading * NoShakeConstants.yFactor);
-            }
-
-             */
-
-            //reset Y signal player
-            index = 0;
-
-            /*
-            //start a thread to read out Y(t) array and play it on the screen
-            ySignalPlayer adjuster = new ySignalPlayer();
-            outputPlayerThread = new Thread(adjuster);
-            outputPlayerThread.start();
-             */
+ */
 
 
             //float toMoveX = Utils.rangeValue((float)(NoShakeConstants.yFactor * YofT), -NaiveConstants.MAX_POS_SHIFT, NaiveConstants.MAX_POS_SHIFT);
@@ -512,13 +463,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             //refresh the view
             noShakeText.invalidate();
              */
-        }
-
-        //reset the clock after 4 seconds if there was no shaking start??
-        else if (timeElapsed>=4) {
-            //Toast.makeText(MainActivity.this, String.format("%d", times), Toast.LENGTH_SHORT).show();
-            //times=0;
-            startTime = System.currentTimeMillis();
-        }
+        //}
+        //Log.d("DBUG", String.format("From x: %f", Convolve.getXMember(5, 0)));
+        //Log.d("DBUG", String.format("From y: %f", Convolve.getXMember(5, 1)));
     }
 }

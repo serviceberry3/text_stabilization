@@ -9,7 +9,7 @@
 
 class convolver {
 public:
-    convolver();
+    convolver(long bufferAddy, int axis);
 
     ~convolver();
 

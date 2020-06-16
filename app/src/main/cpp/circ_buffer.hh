@@ -48,8 +48,13 @@ public:
     //retrieve the head position of the circular buffer
     static size_t circular_buf_get_head();
 
+    //get address of the buffer to pass to convolver
+    long circular_buf_address();
+
+    float* buffer;
+    long buff_address;
+
     //public static properties so they can be used by the convolver
-    static float* buffer;
     static size_t head;
 
 private:
@@ -59,7 +64,8 @@ private:
 };
 
 //a circular buffer instance
-static circular_buffer* buff = NULL;
+static circular_buffer* x_buff = NULL;
+static circular_buffer* y_buff = NULL;
 
 #endif //NOSHAKE_CIRC_BUFFER_HH
 

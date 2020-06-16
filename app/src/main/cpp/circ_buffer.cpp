@@ -1,10 +1,11 @@
 #include "circ_buffer.hh"
 
-float* circular_buffer::buffer = NULL;
+//float* circular_buffer::buffer = NULL;
 size_t circular_buffer::head;
 
 circular_buffer::circular_buffer(size_t sz) {
     buffer = (float*) memalign(16, sizeof(float)*sz);
+    buff_address = (long) buffer;
     max = sz;
     circular_buf_reset();
     assert(circular_buf_empty());
@@ -80,7 +81,7 @@ bool circular_buffer::circular_buf_full() {
 //take the average of the last n entries behind the queue head. Used to determine if the device is shaking.
 float circular_buffer::aggregate_last_n_entries(int n) {
     //make sure buffer is non-NULL
-    assert(buff);
+    assert(x_buff);
 
     //make sure the requested n is not greater than the current population of the queue
     size_t size = circular_buf_size();
@@ -140,54 +141,62 @@ size_t circular_buffer::circular_buf_size() {
     return size;
 }
 
+long circular_buffer::circular_buf_address() {
+    return buff_address;
+}
+
 //java interface functions
 extern "C" {
-    JNIEXPORT void Java_weiner_noah_ctojavaconnector_CircBuffer_circular_1buffer(JNIEnv *javaEnvironment, jclass obj, jlong sz) {
-        buff = new circular_buffer((size_t) sz);
+    JNIEXPORT void Java_weiner_noah_ctojavaconnector_CircBuffer_circular_1buffer(JNIEnv *javaEnvironment, jclass obj, jlong sz, jint axis) {
+        (axis==0 ? x_buff : y_buff) = new circular_buffer((size_t) sz);
     }
 
-    JNIEXPORT void Java_weiner_noah_ctojavaconnector_CircBuffer_circular_1buf_1reset(JNIEnv* __unused javaEnvironment, jclass __unused obj) {
-        buff->circular_buf_reset();
+    JNIEXPORT void Java_weiner_noah_ctojavaconnector_CircBuffer_circular_1buf_1reset(JNIEnv* __unused javaEnvironment, jclass __unused obj, jint axis) {
+        (axis==0 ? x_buff : y_buff)->circular_buf_reset();
     }
 
-    JNIEXPORT jint Java_weiner_noah_ctojavaconnector_CircBuffer_circular_1buf_1put(JNIEnv* __unused javaEnvironment, jclass __unused obj, jfloat data) {
-        return buff->circular_buf_put(data);
+    JNIEXPORT jint Java_weiner_noah_ctojavaconnector_CircBuffer_circular_1buf_1put(JNIEnv* __unused javaEnvironment, jclass __unused obj, jfloat data, jint axis) {
+        return (axis==0 ? x_buff : y_buff)->circular_buf_put(data);
     }
 
-    JNIEXPORT jfloat Java_weiner_noah_ctojavaconnector_CircBuffer_circular_1buf_1get(JNIEnv* __unused javaEnvironment, jclass __unused obj) {
-        return buff->circular_buf_get();
+    JNIEXPORT jfloat Java_weiner_noah_ctojavaconnector_CircBuffer_circular_1buf_1get(JNIEnv* __unused javaEnvironment, jclass __unused obj, jint axis) {
+        return (axis==0 ? x_buff : y_buff)->circular_buf_get();
     }
 
-    JNIEXPORT void Java_weiner_noah_ctojavaconnector_CircBuffer_retreat_1pointer(JNIEnv* __unused javaEnvironment, jclass __unused obj) {
-        buff->retreat_pointer();
+    JNIEXPORT void Java_weiner_noah_ctojavaconnector_CircBuffer_retreat_1pointer(JNIEnv* __unused javaEnvironment, jclass __unused obj, jint axis) {
+        (axis==0 ? x_buff : y_buff)->retreat_pointer();
     }
 
-    JNIEXPORT void Java_weiner_noah_ctojavaconnector_CircBuffer_advance_1pointer(JNIEnv* __unused javaEnvironment, jclass __unused obj) {
-        buff->advance_pointer();
+    JNIEXPORT void Java_weiner_noah_ctojavaconnector_CircBuffer_advance_1pointer(JNIEnv* __unused javaEnvironment, jclass __unused obj, jint axis) {
+        (axis==0 ? x_buff : y_buff)->advance_pointer();
     }
 
-    JNIEXPORT jboolean Java_weiner_noah_ctojavaconnector_CircBuffer_circular_1buf_1empty(JNIEnv* __unused javaEnvironment, jclass __unused obj) {
-        return buff->circular_buf_empty();
+    JNIEXPORT jboolean Java_weiner_noah_ctojavaconnector_CircBuffer_circular_1buf_1empty(JNIEnv* __unused javaEnvironment, jclass __unused obj, jint axis) {
+        return (axis==0 ? x_buff : y_buff)->circular_buf_empty();
     }
 
-    JNIEXPORT jlong Java_weiner_noah_ctojavaconnector_CircBuffer_circular_1buf_1size(JNIEnv* __unused javaEnvironment, jclass __unused obj) {
-        return buff->circular_buf_size();
+    JNIEXPORT jlong Java_weiner_noah_ctojavaconnector_CircBuffer_circular_1buf_1size(JNIEnv* __unused javaEnvironment, jclass __unused obj, jint axis) {
+        return (axis==0 ? x_buff : y_buff)->circular_buf_size();
     }
 
-    JNIEXPORT jfloat Java_weiner_noah_ctojavaconnector_CircBuffer_aggregate_1last_1n_1entries(JNIEnv* __unused javaEnvironment, jclass __unused obj, jint n) {
-        return buff->aggregate_last_n_entries(n);
+    JNIEXPORT jfloat Java_weiner_noah_ctojavaconnector_CircBuffer_aggregate_1last_1n_1entries(JNIEnv* __unused javaEnvironment, jclass __unused obj, jint n, jint axis) {
+        return (axis==0 ? x_buff : y_buff)->aggregate_last_n_entries(n);
     }
 
-    JNIEXPORT jboolean Java_weiner_noah_ctojavaconnector_CircBuffer_circular_1buf_1full(JNIEnv* __unused javaEnvironment, jclass __unused obj) {
-        return buff->circular_buf_full();
+    JNIEXPORT jboolean Java_weiner_noah_ctojavaconnector_CircBuffer_circular_1buf_1full(JNIEnv* __unused javaEnvironment, jclass __unused obj, jint axis) {
+        return (axis==0 ? x_buff : y_buff)->circular_buf_full();
     }
 
-    JNIEXPORT jlong Java_weiner_noah_ctojavaconnector_CircBuffer_circular_1buf_1capacity(JNIEnv* __unused javaEnvironment, jclass __unused obj) {
-        return buff->circular_buf_capacity();
+    JNIEXPORT jlong Java_weiner_noah_ctojavaconnector_CircBuffer_circular_1buf_1capacity(JNIEnv* __unused javaEnvironment, jclass __unused obj, jint axis) {
+        return (axis==0 ? x_buff : y_buff)->circular_buf_capacity();
     }
 
-    JNIEXPORT jint Java_weiner_noah_ctojavaconnector_CircBuffer_circular_1buf_1get_1head(JNIEnv* __unused javaEnvironment, jclass __unused obj) {
-        return buff->head;
+    JNIEXPORT jint Java_weiner_noah_ctojavaconnector_CircBuffer_circular_1buf_1get_1head(JNIEnv* __unused javaEnvironment, jclass __unused obj, jint axis) {
+        return (axis==0 ? x_buff : y_buff)->head;
+    }
+
+    JNIEXPORT jlong Java_weiner_noah_ctojavaconnector_CircBuffer_circular_1buf_1address(JNIEnv* __unused javaEnvironment, jclass __unused obj, jint axis) {
+        return (axis==0 ? x_buff : y_buff)->circular_buf_address();
     }
 }
 

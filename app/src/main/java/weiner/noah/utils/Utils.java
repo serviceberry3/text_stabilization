@@ -12,9 +12,13 @@ public class Utils {
     public static void lowPassFilter(float[] input, float[] output, float alpha)
     {
         //iterate through each element of the input float array
-        for (int i = 0; i < input.length; i++)
+        for (int i = 0; i < input.length; i++) {
             //set that slot in the output array to its previous value plus alphaConstant * (change in the value since last reading)
-            output[i] = output[i] + (alpha * (input[i] - output[i]));
+            output[i] = output[i] + (alpha * (input[i] - output[i])); //we only allow the acceleration reading to change by 85% of its actual change
+
+            //a second way to implement
+            //output[i] = input[i] - (alpha * output[i] + (1-alpha) * input[i]);
+        }
     }
 
     public static float fixNanOrInfinite(float value)
