@@ -48,7 +48,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private long timestamp = 0;
 
     //the view to be stabilized
-    private View layoutSensor;
+    private View layoutSensor, waitingText;
 
     //the text that can be dragged around (compare viewing of this text to how the stabilized text looks)
     private TextView noShakeText;
@@ -124,17 +124,14 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         }
     }
 
-    class ySignalPlayer implements Runnable {
+    //thread that displays "Please wait..." until the circular buffer is full so that convolution can begin
+    class bufferWait implements Runnable {
         @Override
         public void run() {
-            if (index < Convolve.getYSize(0)) {
-                float toMoveX = Convolve.getYMember(index, 0);
-
-                //adjust text on screen
-                layoutSensor.setTranslationX(toMoveX);
-
-                index++;
+            while (CircBuffer.circular_buf_size(0) < NoShakeConstants.buffer_size) {
+                ;
             }
+            waitingText.setVisibility(View.INVISIBLE);
         }
     }
 
@@ -146,6 +143,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         layoutSensor = findViewById(R.id.layout_sensor);
         noShakeText = findViewById(R.id.movable_text); //get the NoShake sample text as a TextView so we can move it around (TextView)
+        waitingText = findViewById(R.id.waiting_text);
+
         originalLayoutParams = (RelativeLayout.LayoutParams) noShakeText.getLayoutParams();
         ogLeftMargin = originalLayoutParams.leftMargin;
         ogTopMargin = originalLayoutParams.topMargin;
@@ -178,6 +177,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         detectShaking shakeListener = new detectShaking();
         new Thread(shakeListener).start();
 
+        bufferWait waitingTextThread = new bufferWait();
+        new Thread(waitingTextThread).start();
+
         gravity[0]=gravity[1]=gravity[2] = 0;
         accelBuffer[0]=accelBuffer[1]=accelBuffer[2] = 0;
 
@@ -191,7 +193,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         accelerometer = sensorManager.getDefaultSensor(Sensor.TYPE_LINEAR_ACCELERATION);
 
         //check for accelerometers present
-        if (checkAccelerometer()<0) {
+        if (checkAccelerometer() < 0) {
             Toast.makeText(MainActivity.this, "No accelerometer found.", Toast.LENGTH_SHORT).show();
         }
 
@@ -206,6 +208,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     }
 
     //function to move the "ClickandDrag" text around the screen when the user touches on it and drags
+    //use to compare against the self-adjusting text
     @Override
     public boolean onTouch(View v, MotionEvent event) {
         int X = (int) event.getRawX();
@@ -262,7 +265,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         sensorManager.registerListener(this, accelerometer, 1);
     }
 
-
     public void naivePhysicsImplementation(SensorEvent event) {
         if (timestamp != 0)
         {
@@ -272,7 +274,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             NtempAcc[2] = Utils.rangeValue(event.values[2], -NaiveConstants.MAX_ACC, NaiveConstants.MAX_ACC);
 
             //apply lowpass filter and store results in acc float array
-            Utils.lowPassFilter(NtempAcc, Nacc, NaiveConstants.LOW_PASS_ALPHA_DEFAULT);
+            Utils.lowPassFilter(NtempAcc, Nacc, NaiveConstants.LOW_PASS_ALPHA);
 
             //get change in time, convert from nanoseconds to seconds
             float dt = (event.timestamp - timestamp) * NaiveConstants.NANOSEC_TO_SEC;
@@ -313,7 +315,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         //set the position of the text based on x and y axis values in position float array
         layoutSensor.setTranslationX(-Nposition[0]);
-        //layoutSensor.setTranslationY(Nposition[1]);
+        layoutSensor.setTranslationY(Nposition[1]);
     }
 
     private void reset()
@@ -332,15 +334,18 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         //nothing found, something's wrong, error
         if (sensors.isEmpty()) {
+            Toast.makeText(MainActivity.this, "No accelerometers found, try restarting device.", Toast.LENGTH_SHORT).show();
             return -1;
         }
 
+        /*
         Toast.makeText(MainActivity.this, String.format("%d accelerometers found", sensors.size()), Toast.LENGTH_SHORT).show();
 
         int index=0;
         for (Sensor thisSensor : sensors) {
             Toast.makeText(MainActivity.this, String.format("Sensor #%d: ", index++) + thisSensor.getName(), Toast.LENGTH_SHORT).show();
         }
+        */
         return 0;
     }
 
@@ -349,7 +354,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         StempAcc[0] = Utils.rangeValue(event.values[0], -NaiveConstants.MAX_ACC, NaiveConstants.MAX_ACC);
         StempAcc[1] = Utils.rangeValue(event.values[1], -NaiveConstants.MAX_ACC, NaiveConstants.MAX_ACC);
 
-        Utils.lowPassFilter(StempAcc, Sacc, NaiveConstants.LOW_PASS_ALPHA_DEFAULT);
+        Utils.lowPassFilter(StempAcc, Sacc, NoShakeConstants.low_pass_alpha);
 
         /*
         //to speed things up, start a separate thread to go write the acceleration data to the buffer while we finish calculations here
@@ -359,14 +364,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         int h = CircBuffer.circular_buf_put(Sacc[0], 0);
         int l = CircBuffer.circular_buf_put(Sacc[1], 1);
-
-
-        /*
-        adjuster = new ySignalPlayer();
-        outputPlayerThread = new Thread(adjuster);
-        outputPlayerThread.start();
-
-         */
 
         //DEBUGGING
         //Log.d("TIME", String.format("%f", timeElapsed));
@@ -391,14 +388,12 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         float accelSqRt = (x * x + y * y + z * z) / (SensorManager.GRAVITY_EARTH * SensorManager.GRAVITY_EARTH);
          */
 
-
+        /*
         //update the stats on the UI to show the accelerometer readings
         ((TextView) findViewById(R.id.x_axis)).setText(String.format("X accel: %f", Sacc[0]));
         ((TextView) findViewById(R.id.y_axis)).setText(String.format("Y accel: %f", Sacc[1]));
         //((TextView) findViewById(R.id.z_axis)).setText(String.format("Z accel: %f", z));
-
-        //get current layout parameters (current position, etc) of the NoShake sample text
-        //editedLayoutParams = (RelativeLayout.LayoutParams) noShakeText.getLayoutParams();
+        */
 
 
         //this is a check to see whether the device is shaking
@@ -410,7 +405,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             float deltaX = 0;
             float deltaY = 0;
 
-            for (int i=0; i<NoShakeConstants.buffer_size; i++) {
+            for (int i=0; i < NoShakeConstants.buffer_size; i++) {
                 float impulseValue = ImpulseResponse.impulse_response_arr_get_value(i);
                 deltaX += impulseValue * Convolve.getTempXMember(i, 0);
                 deltaY += impulseValue * Convolve.getTempXMember(i, 1);
@@ -426,7 +421,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             float toMoveY =  deltaY * NoShakeConstants.yFactor;
             layoutSensor.setTranslationY(toMoveY);
 
-/*
+            /*
             //print out convolved signal array on the log
             for (int i=0; i<NoShakeConstants.buffer_size; i++) {
                 Log.d("XARRAY", String.format("Index %d: %f", i, Convolve.getXMember(i, 0)));
@@ -438,13 +433,14 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 Log.d("YARRAY", String.format("Index %d: %f", i, Convolve.getYMember(i)));
             }
 
- */
-
-
+            */
             //float toMoveX = Utils.rangeValue((float)(NoShakeConstants.yFactor * YofT), -NaiveConstants.MAX_POS_SHIFT, NaiveConstants.MAX_POS_SHIFT);
 
             //** Move the view containing the text by the calculated amount of pixels
             //layoutSensor.setTranslationX(toMoveX);
+
+            //get current layout parameters (current position, etc) of the NoShake sample text
+            //editedLayoutParams = (RelativeLayout.LayoutParams) noShakeText.getLayoutParams();
 
             /* INCORRECT IMPLEMENTATION
             //adjust the x position of the NoShake text, making sure it doesn't go off the screen
@@ -462,7 +458,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
             //refresh the view
             noShakeText.invalidate();
-             */
+            */
+
         //}
         //Log.d("DBUG", String.format("From x: %f", Convolve.getXMember(5, 0)));
         //Log.d("DBUG", String.format("From y: %f", Convolve.getXMember(5, 1)));
