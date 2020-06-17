@@ -25,10 +25,10 @@ public class CircBuffer {
     public static native boolean circular_buf_full(int axis);
 
     //returns the maximum capacity of the buffer
-    public static native long circular_buf_capacity(int axis);
+    public static native int circular_buf_capacity(int axis);
 
     //returns the current number of elements in the buffer
-    public static native long circular_buf_size(int axis);
+    public static native int circular_buf_size(int axis);
 
     public static native float aggregate_last_n_entries(int n, int axis);
 

@@ -3,7 +3,7 @@ package weiner.noah.ctojavaconnector;
 public class Convolve {
     public static native void convolver(long bufferAddy, int axis);
 
-    public static native float convolve(int axis);
+    public static native float convolve(int axis, int current_head);
 
     public static native float getYMember(int index, int axis);
 

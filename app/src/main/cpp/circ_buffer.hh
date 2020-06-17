@@ -37,29 +37,28 @@ public:
     bool circular_buf_full();
 
     //returns the maximum capacity of the buffer
-    size_t circular_buf_capacity();
+    int circular_buf_capacity();
 
     //returns the current number of elements in the buffer
-    size_t circular_buf_size();
+    int circular_buf_size();
 
     //give an average of the last n entries in the buffer
     float aggregate_last_n_entries(int n);
 
     //retrieve the head position of the circular buffer
-    static size_t circular_buf_get_head();
+    int circular_buf_get_head();
 
     //get address of the buffer to pass to convolver
     long circular_buf_address();
 
+    //public properties so they can be used by the convolver
     float* buffer;
     long buff_address;
-
-    //public static properties so they can be used by the convolver
-    static size_t head;
+    int head;
 
 private:
-    size_t tail;
-    size_t max; //maximum size of the buffer
+    int tail;
+    int max; //maximum size of the buffer
     bool full;
 };
 

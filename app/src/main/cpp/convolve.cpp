@@ -25,14 +25,14 @@ convolver::~convolver() {
     free(yArray);
 }
 
-float convolver::convolve() {
+float convolver::convolve(int current_head) {
     /*
     float* tempHArray = (float*) calloc(yLength, sizeof(float));
     memcpy(tempHArray, hArray, hLength);
 */
     tempXArray = (float*) malloc(sizeof(float) * xLength);
 
-    int currHead = x_buff->head;
+    int currHead = current_head;
 
     //we want to order the data from the circular buffer from oldest to newest, using the head as the break point
     memcpy(tempXArray, xArray + currHead, sizeof(float) * (xLength-currHead));
@@ -75,8 +75,8 @@ extern "C" {
         (axis==0 ? ySignalConvolverX : ySignalConvolverY) = new convolver(bufferAddy, axis);
     }
 
-    JNIEXPORT jfloat Java_weiner_noah_ctojavaconnector_Convolve_convolve(JNIEnv *javaEnvironment, jclass __unused obj, jint axis) {
-        return (axis==0 ? ySignalConvolverX : ySignalConvolverY)->convolve();
+    JNIEXPORT jfloat Java_weiner_noah_ctojavaconnector_Convolve_convolve(JNIEnv *javaEnvironment, jclass __unused obj, jint axis, jint current_head) {
+        return (axis==0 ? ySignalConvolverX : ySignalConvolverY)->convolve(current_head);
     }
 
     JNIEXPORT jfloat Java_weiner_noah_ctojavaconnector_Convolve_getYMember(JNIEnv *javaEnvironment, jclass __unused obj, jint index, jint axis) {

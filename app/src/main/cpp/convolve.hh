@@ -13,7 +13,7 @@ public:
 
     ~convolver();
 
-    float convolve();
+    float convolve(int current_head);
 
     float getYMember(int index);
 

@@ -404,8 +404,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         //this is a check to see whether the device is shaking
         //if (shaking==1) { //empirically-determined threshold in order to keep text still when not really shaking
             //convolve the circular buffer of acceleration data with the impulse response array to get Y(t) array
-            float f = Convolve.convolve(0);
-            float y = Convolve.convolve(1);
+            float f = Convolve.convolve(0, CircBuffer.circular_buf_get_head(0));
+            float y = Convolve.convolve(1, CircBuffer.circular_buf_get_head(1));
 
             float deltaX = 0;
             float deltaY = 0;

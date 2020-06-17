@@ -1,7 +1,5 @@
 #include "circ_buffer.hh"
 
-//float* circular_buffer::buffer = NULL;
-size_t circular_buffer::head;
 
 circular_buffer::circular_buffer(size_t sz) {
     buffer = (float*) memalign(16, sizeof(float)*sz);
@@ -46,11 +44,11 @@ void circular_buffer::retreat_pointer() {
     tail = (tail+1) % max;
 }
 
-size_t circular_buffer::circular_buf_get_head() {
+int circular_buffer::circular_buf_get_head() {
     return head;
 }
 
-size_t circular_buffer::circular_buf_capacity() {
+int circular_buffer::circular_buf_capacity() {
     return max;
 }
 
@@ -119,7 +117,7 @@ float circular_buffer::aggregate_last_n_entries(int n) {
     return average / (float)n;
 }
 
-size_t circular_buffer::circular_buf_size() {
+int circular_buffer::circular_buf_size() {
     //if the buffer is full, our size is the max
     size_t size = max;
 
@@ -175,7 +173,7 @@ extern "C" {
         return (axis==0 ? x_buff : y_buff)->circular_buf_empty();
     }
 
-    JNIEXPORT jlong Java_weiner_noah_ctojavaconnector_CircBuffer_circular_1buf_1size(JNIEnv* __unused javaEnvironment, jclass __unused obj, jint axis) {
+    JNIEXPORT jint Java_weiner_noah_ctojavaconnector_CircBuffer_circular_1buf_1size(JNIEnv* __unused javaEnvironment, jclass __unused obj, jint axis) {
         return (axis==0 ? x_buff : y_buff)->circular_buf_size();
     }
 
@@ -187,12 +185,12 @@ extern "C" {
         return (axis==0 ? x_buff : y_buff)->circular_buf_full();
     }
 
-    JNIEXPORT jlong Java_weiner_noah_ctojavaconnector_CircBuffer_circular_1buf_1capacity(JNIEnv* __unused javaEnvironment, jclass __unused obj, jint axis) {
+    JNIEXPORT jint Java_weiner_noah_ctojavaconnector_CircBuffer_circular_1buf_1capacity(JNIEnv* __unused javaEnvironment, jclass __unused obj, jint axis) {
         return (axis==0 ? x_buff : y_buff)->circular_buf_capacity();
     }
 
     JNIEXPORT jint Java_weiner_noah_ctojavaconnector_CircBuffer_circular_1buf_1get_1head(JNIEnv* __unused javaEnvironment, jclass __unused obj, jint axis) {
-        return (axis==0 ? x_buff : y_buff)->head;
+        return (axis==0 ? x_buff : y_buff)->circular_buf_get_head();
     }
 
     JNIEXPORT jlong Java_weiner_noah_ctojavaconnector_CircBuffer_circular_1buf_1address(JNIEnv* __unused javaEnvironment, jclass __unused obj, jint axis) {
