@@ -75,6 +75,10 @@ extern "C" {
         (axis==0 ? ySignalConvolverX : ySignalConvolverY) = new convolver(bufferAddy, axis);
     }
 
+    JNIEXPORT void Java_weiner_noah_ctojavaconnector_Convolve_convolver_1destroy(JNIEnv *javaEnvironment, jclass __unused obj, jint axis) {
+        (axis==0 ? delete ySignalConvolverX : delete ySignalConvolverY);
+    }
+
     JNIEXPORT jfloat Java_weiner_noah_ctojavaconnector_Convolve_convolve(JNIEnv *javaEnvironment, jclass __unused obj, jint axis, jint current_head) {
         return (axis==0 ? ySignalConvolverX : ySignalConvolverY)->convolve(current_head);
     }

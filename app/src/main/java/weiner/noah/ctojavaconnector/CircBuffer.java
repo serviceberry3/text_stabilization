@@ -4,6 +4,8 @@ public class CircBuffer {
     //JAVA C++ INTERFACE FUNCTION PROTOTYPES
     public static native void circular_buffer(long sz, int axis);
 
+    public static native void circular_buffer_destroy(int axis);
+
     //reset the circular buffer to empty, head == tail
     public static native void circular_buf_reset(int axis);
 

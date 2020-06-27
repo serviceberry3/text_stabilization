@@ -11,6 +11,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.widget.Button;
 import android.widget.RelativeLayout;
+import android.widget.ShareActionProvider;
 import android.widget.TextView;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorEvent;
@@ -23,6 +24,7 @@ import weiner.noah.NaiveConstants;
 import weiner.noah.NoShakeConstants;
 import weiner.noah.utils.Utils;
 import weiner.noah.ctojavaconnector.*;
+//import weiner.noah.openglbufftesting;
 
 
 public class MainActivity extends AppCompatActivity implements SensorEventListener, View.OnTouchListener {
@@ -43,6 +45,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     //NOSHAKE SPRING IMPLEMENTATION ACCEL ARRAYS
     private final float[] StempAcc = new float[3];
     private final float[] Sacc = new float[3];
+    private final float[] accAfterFrix = new float[3];
 
     //long to use for keeping track of thyme
     private long timestamp = 0;
@@ -324,6 +327,19 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         Nvelocity[0] = Nvelocity[1] = Nvelocity[2] = 0;
         timestamp = 0;
 
+        CircBuffer.circular_buffer_destroy(0);
+        CircBuffer.circular_buffer_destroy(1);
+
+        Convolve.convolver_destroy(0);
+        Convolve.convolver_destroy(1);
+
+        //initialize a circular buffer of 211 floats
+        CircBuffer.circular_buffer(NoShakeConstants.buffer_size, 0);
+        CircBuffer.circular_buffer(NoShakeConstants.buffer_size, 1);
+
+        Convolve.convolver(CircBuffer.circular_buf_address(0), 0);
+        Convolve.convolver(CircBuffer.circular_buf_address(1), 1);
+
         layoutSensor.setTranslationX(0);
         layoutSensor.setTranslationY(0);
     }
@@ -362,8 +378,24 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         new Thread(writerThread).start();
          */
 
-        int h = CircBuffer.circular_buf_put(Sacc[0], 0);
-        int l = CircBuffer.circular_buf_put(Sacc[1], 1);
+        //try to eliminate noise by knocking low values down to 0 (also make text re-center faster)
+        if (Math.abs(Sacc[0]) <= 0.2) {
+            Sacc[0] = 0;
+        }
+        if (Math.abs(Sacc[1]) <= 0.2) {
+            Sacc[1] = 0;
+        }
+
+        //apply some extra friction (hope is to make text return to center of screen a little faster)
+        //rapid decreases will be highlighted by this
+        float xFrixToApply = accAfterFrix[0] * NoShakeConstants.extra_frix_const;
+        float yFrixToApply = accAfterFrix[1] * NoShakeConstants.extra_frix_const;
+
+        accAfterFrix[0] = Sacc[0] - xFrixToApply;
+        accAfterFrix[1] = Sacc[1] - yFrixToApply;
+
+        int h = CircBuffer.circular_buf_put(accAfterFrix[0], 0);
+        int l = CircBuffer.circular_buf_put(accAfterFrix[1], 1);
 
         //DEBUGGING
         //Log.d("TIME", String.format("%f", timeElapsed));
@@ -388,12 +420,12 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         float accelSqRt = (x * x + y * y + z * z) / (SensorManager.GRAVITY_EARTH * SensorManager.GRAVITY_EARTH);
          */
 
-        /*
+
         //update the stats on the UI to show the accelerometer readings
-        ((TextView) findViewById(R.id.x_axis)).setText(String.format("X accel: %f", Sacc[0]));
-        ((TextView) findViewById(R.id.y_axis)).setText(String.format("Y accel: %f", Sacc[1]));
+        //((TextView) findViewById(R.id.x_axis)).setText(String.format("X accel: %f", Sacc[0]));
+        //((TextView) findViewById(R.id.y_axis)).setText(String.format("Y accel: %f", Sacc[1]));
         //((TextView) findViewById(R.id.z_axis)).setText(String.format("Z accel: %f", z));
-        */
+
 
 
         //this is a check to see whether the device is shaking
@@ -415,10 +447,10 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             deltaX /= impulseSum;
             deltaY /= impulseSum;
 
-            float toMoveX = -1 * deltaX * NoShakeConstants.yFactor;
+            float toMoveX = (deltaX - NaiveConstants.POSITION_FRICTION_DEFAULT * deltaX) * NoShakeConstants.yFactor;
             layoutSensor.setTranslationX(Utils.rangeValue(toMoveX, -NaiveConstants.MAX_POS_SHIFT, NaiveConstants.MAX_POS_SHIFT));
 
-            float toMoveY =  deltaY * NoShakeConstants.yFactor;
+            float toMoveY = -1 * (deltaY - NaiveConstants.POSITION_FRICTION_DEFAULT * deltaY) * NoShakeConstants.yFactor;
             layoutSensor.setTranslationY(toMoveY);
 
             /*
@@ -432,8 +464,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             for (int i=0; i<Convolve.getYSize(); i++) {
                 Log.d("YARRAY", String.format("Index %d: %f", i, Convolve.getYMember(i)));
             }
-
             */
+
             //float toMoveX = Utils.rangeValue((float)(NoShakeConstants.yFactor * YofT), -NaiveConstants.MAX_POS_SHIFT, NaiveConstants.MAX_POS_SHIFT);
 
             //** Move the view containing the text by the calculated amount of pixels
