@@ -20,8 +20,9 @@ convolver::convolver(long bufferAddy, int axis) {
 }
 
 convolver::~convolver() {
-    free(hArray);
+    //free(hArray);
     free(xArray);
+    free(tempXArray);
     free(yArray);
 }
 

@@ -420,13 +420,10 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         float accelSqRt = (x * x + y * y + z * z) / (SensorManager.GRAVITY_EARTH * SensorManager.GRAVITY_EARTH);
          */
 
-
         //update the stats on the UI to show the accelerometer readings
         //((TextView) findViewById(R.id.x_axis)).setText(String.format("X accel: %f", Sacc[0]));
         //((TextView) findViewById(R.id.y_axis)).setText(String.format("Y accel: %f", Sacc[1]));
         //((TextView) findViewById(R.id.z_axis)).setText(String.format("Z accel: %f", z));
-
-
 
         //this is a check to see whether the device is shaking
         //if (shaking==1) { //empirically-determined threshold in order to keep text still when not really shaking
