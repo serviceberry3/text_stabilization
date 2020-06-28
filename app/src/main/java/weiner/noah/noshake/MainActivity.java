@@ -431,10 +431,10 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
          */
 
         //try to eliminate noise by knocking low values down to 0 (also make text re-center faster)
-        if (Math.abs(Sacc[0]) <= 0.2) {
+        if (Math.abs(Sacc[0]) <= 0.5) {
             Sacc[0] = 0;
         }
-        if (Math.abs(Sacc[1]) <= 0.2) {
+        if (Math.abs(Sacc[1]) <= 0.5) {
             Sacc[1] = 0;
         }
 
@@ -497,7 +497,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             deltaY /= impulseSum;
 
             toMoveX = (deltaX - NaiveConstants.POSITION_FRICTION_DEFAULT * deltaX) * NoShakeConstants.yFactor;
-            Log.d("DBUG", String.format("To move x is %f", toMoveX));
+            //Log.d("DBUG", String.format("To move x is %f", toMoveX));
             myRenderer.toMoveX = toMoveX/1000f;
             //layoutSensor.setTranslationX(Utils.rangeValue(toMoveX, -NaiveConstants.MAX_POS_SHIFT, NaiveConstants.MAX_POS_SHIFT));
 

@@ -261,7 +261,7 @@ public class Square {
         textPaint = new Paint();
 
         //sets the size of the text to display
-        textPaint.setTextSize(32);
+        textPaint.setTextSize(48);
 
         //set antialiasing bit in the flags, which smooths out edges of what is being drawn
         textPaint.setAntiAlias(true);
@@ -269,7 +269,7 @@ public class Square {
         //set the color of the paint
         textPaint.setARGB(0xff, 0x00, 0x00, 0xdd);
 
-        canvas.drawText("NOSHAKE TEST", 14, 135, textPaint); //WAS x:16, y:112
+        canvas.drawText("NOSHAKE", 14, 135, textPaint); //WAS x:16, y:112
 
         //generate one texture ptr/names for textures (actually generates an int)
         GLES20.glGenTextures(1, textures, 0);
