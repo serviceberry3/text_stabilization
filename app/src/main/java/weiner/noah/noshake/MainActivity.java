@@ -9,6 +9,8 @@ import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.Window;
+import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.RelativeLayout;
 import android.widget.ShareActionProvider;
@@ -22,6 +24,8 @@ import java.util.List;
 
 import weiner.noah.NaiveConstants;
 import weiner.noah.NoShakeConstants;
+import weiner.noah.openglbufftesting.OpenGLRenderer;
+import weiner.noah.openglbufftesting.OpenGLView;
 import weiner.noah.utils.Utils;
 import weiner.noah.ctojavaconnector.*;
 //import weiner.noah.openglbufftesting;
@@ -86,6 +90,12 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     private Thread outputPlayerThread=null;
 
+    private OpenGLRenderer myRenderer;
+
+    private OpenGLView openGLView;
+
+    public static float toMoveX, toMoveY;
+
     //load up native C code
     static {
         System.loadLibrary("circ_buffer");
@@ -142,6 +152,29 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+
+
+        // requesting to turn the title OFF
+        requestWindowFeature(Window.FEATURE_NO_TITLE);
+        // making it full screen
+        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
+
+        //initiate the openGLView and create an instance with this activity
+        openGLView = new OpenGLView(this);
+
+        openGLView.setEGLContextClientVersion(2);
+
+        openGLView.setPreserveEGLContextOnPause(true);
+
+        myRenderer = new OpenGLRenderer(this, MainActivity.this);
+
+        openGLView.setRenderer(myRenderer);
+
+        //openGLView = (OpenGLView) findViewById(R.id.openGLView);
+
+        setContentView(openGLView);
+
+        /*
         setContentView(R.layout.activity_main);
 
         layoutSensor = findViewById(R.id.layout_sensor);
@@ -152,11 +185,15 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         ogLeftMargin = originalLayoutParams.leftMargin;
         ogTopMargin = originalLayoutParams.topMargin;
 
+
+
         //get pixel dimensions of screen
         DisplayMetrics displayMetrics = new DisplayMetrics();
         getWindowManager().getDefaultDisplay().getMetrics(displayMetrics);
         int height = displayMetrics.heightPixels;
         int width = displayMetrics.widthPixels;
+
+         */
 
         //initialize a circular buffer of 211 floats
         CircBuffer.circular_buffer(NoShakeConstants.buffer_size, 0);
@@ -176,18 +213,23 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         Convolve.convolver(CircBuffer.circular_buf_address(0), 0);
         Convolve.convolver(CircBuffer.circular_buf_address(1), 1);
 
+        /*
         //immediately start a looping thread that constantly reads the last 50 data and sets the "shaking" flag accordingly
         detectShaking shakeListener = new detectShaking();
         new Thread(shakeListener).start();
 
+
+
         bufferWait waitingTextThread = new bufferWait();
         new Thread(waitingTextThread).start();
+
+         */
 
         gravity[0]=gravity[1]=gravity[2] = 0;
         accelBuffer[0]=accelBuffer[1]=accelBuffer[2] = 0;
 
         //set the draggable text to listen, according to onTouch function (defined below)
-        ((TextView)findViewById(R.id.movable_text)).setOnTouchListener(this);
+        //((TextView)findViewById(R.id.movable_text)).setOnTouchListener(this);
 
         //initialize a SensorEvent
         sensorManager = (SensorManager) getSystemService(SENSOR_SERVICE);
@@ -200,6 +242,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             Toast.makeText(MainActivity.this, "No accelerometer found.", Toast.LENGTH_SHORT).show();
         }
 
+        /*
         //set click listener for the RESET button
         ((Button)findViewById(R.id.move_button)).setOnClickListener(new View.OnClickListener() {
             @Override
@@ -208,6 +251,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 reset();
             }
         });
+         */
     }
 
     //function to move the "ClickandDrag" text around the screen when the user touches on it and drags
@@ -266,6 +310,14 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     protected void onResume() { //stuff to do when app comes back from background
         super.onResume();
         sensorManager.registerListener(this, accelerometer, 1);
+
+        openGLView.onResume();
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        openGLView.onPause();
     }
 
     public void naivePhysicsImplementation(SensorEvent event) {
@@ -444,11 +496,14 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             deltaX /= impulseSum;
             deltaY /= impulseSum;
 
-            float toMoveX = (deltaX - NaiveConstants.POSITION_FRICTION_DEFAULT * deltaX) * NoShakeConstants.yFactor;
-            layoutSensor.setTranslationX(Utils.rangeValue(toMoveX, -NaiveConstants.MAX_POS_SHIFT, NaiveConstants.MAX_POS_SHIFT));
+            toMoveX = (deltaX - NaiveConstants.POSITION_FRICTION_DEFAULT * deltaX) * NoShakeConstants.yFactor;
+            Log.d("DBUG", String.format("To move x is %f", toMoveX));
+            myRenderer.toMoveX = toMoveX/1000f;
+            //layoutSensor.setTranslationX(Utils.rangeValue(toMoveX, -NaiveConstants.MAX_POS_SHIFT, NaiveConstants.MAX_POS_SHIFT));
 
-            float toMoveY = -1 * (deltaY - NaiveConstants.POSITION_FRICTION_DEFAULT * deltaY) * NoShakeConstants.yFactor;
-            layoutSensor.setTranslationY(toMoveY);
+            toMoveY = -1 * (deltaY - NaiveConstants.POSITION_FRICTION_DEFAULT * deltaY) * NoShakeConstants.yFactor;
+            myRenderer.toMoveY = toMoveY/1000f;
+            //layoutSensor.setTranslationY(toMoveY);
 
             /*
             //print out convolved signal array on the log
