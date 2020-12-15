@@ -16,7 +16,7 @@
         android:layout_marginTop="10dp"
         android:id="@+id/waiting_text"
         android:layout_centerHorizontal="true"/>
-
+<!--
     <TextView
         android:id="@+id/movable_text"
         android:layout_width="wrap_content"
@@ -24,7 +24,7 @@
         android:layout_marginLeft="100dp"
         android:layout_marginTop="200dp"
         android:text="ClickandDragTEST"
-        android:textSize="30dp" />
+        android:textSize="30dp" /> -->
 <!--
         <TextView
             android:layout_width="wrap_content"
@@ -82,7 +82,8 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="650dp"
         android:layout_marginLeft="160dp"
-        android:text="RESET" />
+        android:text="RESET"
+        android:visibility="gone"/>
 
     <FrameLayout
         android:layout_width="match_parent"
@@ -95,7 +96,7 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:layout_margin="20dp"
-            android:orientation="vertical">
+            android:orientation="horizontal">
 
 
             <TextView
@@ -103,9 +104,9 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginLeft="55dp"
-                android:layout_marginTop="270dp"
-                android:text="TEST NOSHAKE TEXT"
-                android:textSize="25sp" />
+                android:layout_marginTop="100dp"
+                android:text="@string/noshake_text"
+                android:textSize="35sp" />
 
         </LinearLayout>
 
