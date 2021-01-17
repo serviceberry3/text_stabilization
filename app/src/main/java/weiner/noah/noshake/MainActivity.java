@@ -532,8 +532,13 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             //OPENGL VERSION
             //myRenderer.toMoveX = toMoveX/1000f;
 
+            long time = System.nanoTime();
+
             //ANDROID GRAPHICS VIEW VERSION
             layoutSensor.setTranslationX(Utils.rangeValue(toMoveX, -NaiveConstants.MAX_POS_SHIFT, NaiveConstants.MAX_POS_SHIFT));
+
+            time = System.nanoTime() - time;
+            Log.i("TIMER", String.format("setTranslationX took %d ns", time));
 
             //calculate how much we needto move text in x direction for this frame
             toMoveX = -1 *                                                               //flip

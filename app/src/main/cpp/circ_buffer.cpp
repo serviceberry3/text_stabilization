@@ -78,8 +78,10 @@ bool circular_buffer::circular_buf_full() {
 
 //take the average of the last n entries behind the queue head. Used to determine if the device is shaking.
 float circular_buffer::aggregate_last_n_entries(int n) {
-    //make sure buffer is non-NULL
+    //make sure buffers are non-NULL
+    //TODO: maybe find a better way to do this, since this is supposed to serve as a sort of user-blind API
     assert(x_buff);
+    assert(y_buff);
 
     //make sure the requested n is not greater than the current population of the queue
     size_t size = circular_buf_size();
