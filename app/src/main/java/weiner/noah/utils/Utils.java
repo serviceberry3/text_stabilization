@@ -5,8 +5,9 @@ public class Utils {
     {
         //apply boundaries to a given value
         if (value > max) return max;
-        if (value < min) return min;
-        return value;
+
+        //otherwise if val less than min return min, otherwise return value
+        return Math.max(value, min);
     }
 
     public static void lowPassFilter(float[] input, float[] output, float alpha)

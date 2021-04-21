@@ -99,18 +99,18 @@ public class ScreenShader {
         //link the program, create OpenGL ES program executable
         GLES20.glLinkProgram(mProgram);
 
-        // a float has 4 bytes so we allocate for each coordinate 4 bytes
+        //a float has 4 bytes so we allocate for each coordinate 4 bytes
         ByteBuffer vertexByteBuffer = ByteBuffer.allocateDirect(vertices.length * 4);
 
         vertexByteBuffer.order(ByteOrder.nativeOrder());
 
-        // allocates the memory from the byte buffer
+        //allocates the memory from the byte buffer
         vertexBuffer = vertexByteBuffer.asFloatBuffer();
 
-        // fill the vertexBuffer with the vertices
+        //fill the vertexBuffer with the vertices
         vertexBuffer.put(vertices);
 
-        // set the cursor position to the beginning of the buffer
+        //set the cursor position to the beginning of the buffer
         vertexBuffer.position(0);
 
 
@@ -217,7 +217,7 @@ public class ScreenShader {
         //tells OpenGL to draw triangle strips found in buffer provided, starting with first element. Also "count" is how many vertices there are
         //GLES20.glDrawArrays(GL10.GL_TRIANGLE_STRIP, 0, vertices.length / COORDS_PER_VERTEX);
 
-        //draw triangle -- google version
+        //draw triangle -- Google tutorial version
         //GLES20.glDrawArrays(GLES20.GL_TRIANGLE_FAN, 0, vertexCount);
         GLES20.glDrawElements(GLES20.GL_TRIANGLES, 6, GLES20.GL_UNSIGNED_SHORT, drawListBuffer);
 

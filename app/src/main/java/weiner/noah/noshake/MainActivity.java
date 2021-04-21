@@ -83,18 +83,27 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     private float impulseSum;
 
-    //is the device shaking??
+    //is the device shaking?
     private volatile int shaking = 0;
 
-    private int index=0, check=0, times=0;
+    private int index = 0, check = 0, times = 0;
 
-    private Thread outputPlayerThread=null;
+    private Thread outputPlayerThread = null;
 
     private OpenGLRenderer myRenderer;
 
     private OpenGLView openGLView;
 
     public static float toMoveX, toMoveY;
+
+    //whether to use OpenGL for rendering
+    private boolean USE_OPENGL_SQUARE_VERS = true;
+
+    //whether to apply the NoShake correction or leave text/square stagnant
+    private boolean APPLY_CORRECTION = true;
+
+    //log tag
+    private final String TAG = "MainActivity";
 
     //load up native C code. lib includes circ_buffer.cpp, convolve.cpp, and impulse_response.cpp
     static {
@@ -163,13 +172,24 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         super.onCreate(savedInstanceState);
 
 
+        //hide nav bar and status bar
+        getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+                | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+                | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION // hide nav bar
+                | View.SYSTEM_UI_FLAG_FULLSCREEN // hide status bar
+                | View.SYSTEM_UI_FLAG_IMMERSIVE);
+
+
         //requesting to turn the title OFF
-        requestWindowFeature(Window.FEATURE_NO_TITLE);
+        //requestWindowFeature(Window.FEATURE_NO_TITLE);
 
         //making it full screen
-        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        //getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
 
-        getSupportActionBar().hide(); //hide the title bar.
+        //getSupportActionBar().hide(); //hide the title bar.
+
+        Log.i(TAG, "Initiating openglview...");
 
         //initiate the openGLView and create an instance with this activity
         openGLView = new OpenGLView(this);
@@ -184,11 +204,15 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         //openGLView = (OpenGLView) findViewById(R.id.openGLView);
 
-        //FOR OPENGL VERSION
-        //setContentView(openGLView);
+        if (USE_OPENGL_SQUARE_VERS) {
+            //FOR OPENGL VERSION
+            setContentView(openGLView);
+        }
+        else {
+            //FOR ANDROID GRAPHICS VIEW VSION
+            setContentView(R.layout.activity_main);
+        }
 
-        //FOR ANDROID GRAPHICS VIEW VSION
-        setContentView(R.layout.activity_main);
 
         layoutSensor = findViewById(R.id.layout_sensor);
         //noShakeText = findViewById(R.id.movable_text); //get the NoShake sample text as a TextView so we can move it around (TextView)
@@ -229,8 +253,11 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         new Thread(shakeListener).start();
 
 
-        bufferWait waitingTextThread = new bufferWait();
-        new Thread(waitingTextThread).start();
+        //display PLEASE WAIT text while circ buffer is filling up with data
+        if (!USE_OPENGL_SQUARE_VERS) {
+            bufferWait waitingTextThread = new bufferWait();
+            new Thread(waitingTextThread).start();
+        }
 
 
         gravity[0] = gravity[1] = gravity[2] = 0;
@@ -261,9 +288,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 reset();
             }
         });
-         */
+        */
     }
-
 
 
     //function to move the "ClickandDrag" text around the screen when the user touches on it and drags
@@ -529,27 +555,34 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                     * NoShakeConstants.yFactor;                                         //arbitrary scaling factor
             //Log.d("DBUG", String.format("To move x is %f", toMoveX));
 
-            //OPENGL VERSION
-            //myRenderer.toMoveX = toMoveX/1000f;
-
-            long time = System.nanoTime();
-
-            //ANDROID GRAPHICS VIEW VERSION
-            layoutSensor.setTranslationX(Utils.rangeValue(toMoveX, -NaiveConstants.MAX_POS_SHIFT, NaiveConstants.MAX_POS_SHIFT));
-
-            time = System.nanoTime() - time;
-            Log.i("TIMER", String.format("setTranslationX took %d ns", time));
 
             //calculate how much we needto move text in x direction for this frame
             toMoveX = -1 *                                                               //flip
-                    (deltaY - NaiveConstants.POSITION_FRICTION_DEFAULT * deltaY)         //reduce deltaY by adding some friction. Use deltaY for X displacement b/c screen is horizontal
-                    * NoShakeConstants.yFactor;                                          //arbitrary scaling factor
+                (deltaY - NaiveConstants.POSITION_FRICTION_DEFAULT * deltaY)         //reduce deltaY by adding some friction. Use deltaY for X displacement b/c screen is horizontal
+                * NoShakeConstants.yFactor;                                          //arbitrary scaling factor
 
-            //OPENGL VERSION
-            //myRenderer.toMoveY = toMoveY/1000f;
 
-            //ANDROID GRAPHICS VIEW VERSION
-            layoutSensor.setTranslationY(toMoveY);
+
+            if (APPLY_CORRECTION) {
+                if (USE_OPENGL_SQUARE_VERS) {
+                    //OPENGL VERSION
+                    myRenderer.toMoveX = toMoveX / 1000f;
+
+                    myRenderer.toMoveY = toMoveY / 1000f;
+                } else {
+
+                    long time = System.nanoTime();
+
+                    //ANDROID GRAPHICS VIEW VERSION
+                    layoutSensor.setTranslationX(toMoveX);
+
+                    time = System.nanoTime() - time;
+                    Log.i("TIMER", String.format("setTranslationX took %d ns", time));
+
+                    //ANDROID GRAPHICS VIEW VERSION
+                    layoutSensor.setTranslationY(toMoveY);
+                }
+            }
 
             /*
             //OPTIONAL: print out convolved signal array on the log -- x direction

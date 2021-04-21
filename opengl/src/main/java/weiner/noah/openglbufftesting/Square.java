@@ -21,6 +21,8 @@ public class Square {
     private Bitmap bitmap;
     private Canvas canvas;
     private Paint textPaint;
+
+    //the solid base background of the square
     private Drawable background;
     private FloatBuffer vertexBuffer;   // buffer holding the vertices
     private ShortBuffer drawListBuffer;
@@ -42,10 +44,10 @@ public class Square {
      */
 
     private float vertices[] = {
-            -0.1f, 0.1f, 0.0f,   //top left
-            -0.1f, -0.1f, 0.0f,  //bottom left
-            0.1f, -0.1f, 0.0f,   //bottom right
-            0.1f, 0.1f, 0.0f   //top right
+            -0.3f, 0.3f, 0.0f,   //top left
+            -0.3f, -0.3f, 0.0f,  //bottom left
+            0.3f, -0.3f, 0.0f,   //bottom right
+            0.3f, 0.3f, 0.0f   //top right
     };
 
 
@@ -91,7 +93,10 @@ public class Square {
     // Set color with red, green, blue and alpha (opacity) values
     //float[] color = {0.63671875f, 0.76953125f, 0.22265625f, 1.0f};
 
-    float[] color = {0.5f, 0.7f, 0.3f, 1.0f};
+    //greenish
+    float[] color1 = {0.5f, 0.7f, 0.3f, 1.0f};
+    //black
+    float[] color2 = {0.0f, 0.0f, 0.0f, 1.0f};
 
     public Square() {
         //load the vertex shader
@@ -112,20 +117,19 @@ public class Square {
         //link the program, create OpenGL ES program executable
         GLES20.glLinkProgram(mProgram);
 
-        // a float has 4 bytes so we allocate for each coordinate 4 bytes
+        //a float has 4 bytes so we allocate 4 bytes for each coordinate
         ByteBuffer vertexByteBuffer = ByteBuffer.allocateDirect(vertices.length * 4);
 
         vertexByteBuffer.order(ByteOrder.nativeOrder());
 
-        // allocates the memory from the byte buffer
+        //allocates the memory from the byte buffer
         vertexBuffer = vertexByteBuffer.asFloatBuffer();
 
-        // fill the vertexBuffer with the vertices
+        //fill the vertexBuffer with the vertices
         vertexBuffer.put(vertices);
 
-        // set the cursor position to the beginning of the buffer
+        //set the cursor position to the beginning of the buffer
         vertexBuffer.position(0);
-
 
         //initialize byte buffer for the draw list
         vertexByteBuffer = ByteBuffer.allocateDirect(drawOrder.length * 2);
@@ -164,7 +168,6 @@ public class Square {
         //prepare the triangle coordinate data
         GLES20.glVertexAttribPointer(positionHandle, COORDS_PER_VERTEX, GLES20.GL_FLOAT, false, vertexStride, vertexBuffer);
 
-
         //GLES20.glClearColor(0.0f, 0.0f,0.0f,0.5f);
 
         //clear the color buffer (bitmaps) -- clear screen and depth buffer
@@ -173,8 +176,8 @@ public class Square {
         //get fragment shader's vColor member
         colorHandle = GLES20.glGetUniformLocation(mProgram, "vColor");
 
-        //set color for triangle -- values of RGB floats are between 0 and 1 inclusif
-        GLES20.glUniform4fv(colorHandle, 1, color, 0);
+        //set color for square -- values of RGB floats are between 0 and 1 inclusive
+        GLES20.glUniform4fv(colorHandle, 1, color2, 0);
 
         GLES20.glDisable(GLES20.GL_CULL_FACE);
 
@@ -197,6 +200,7 @@ public class Square {
         //set the face rotation
         GLES20.glFrontFace(GL10.GL_CW);
 
+        //select texture 0, which is the black box, as created in loadGLTexture()
         mTextureDataHandle = textures[0];
 
         mTextureUniformHandle = GLES20.glGetUniformLocation(mProgram, "u_Texture");
@@ -232,7 +236,7 @@ public class Square {
         //tells OpenGL to draw triangle strips found in buffer provided, starting with first element. Also "count" is how many vertices there are
         //GLES20.glDrawArrays(GL10.GL_TRIANGLE_STRIP, 0, triangleCoords.length / COORDS_PER_VERTEX);
 
-        //draw triangle -- google version
+        //draw the square -- Android tutorial version
         //GLES20.glDrawArrays(GLES20.GL_TRIANGLE_FAN, 0, vertexCount);
         GLES20.glDrawElements(GLES20.GL_TRIANGLES, 6, GLES20.GL_UNSIGNED_SHORT, drawListBuffer);
 
@@ -246,15 +250,19 @@ public class Square {
         //if not, make sure width and height are pwrs of 2
         //Bitmap bitmap = BitmapFactory.decodeResource(context.getResources(), R.drawable.android);
 
+        //create a new square bitmap and put it on a Canvas
         bitmap = Bitmap.createBitmap(256, 256, Bitmap.Config.ARGB_4444);
 
         canvas = new Canvas(bitmap);
         bitmap.eraseColor(0);
 
-        background = context.getResources().getDrawable(R.drawable.ic_launcher_background);
+        //set the square background
+        background = context.getResources().getDrawable(R.drawable.black_box);
 
-        background.setBounds(0, 0, 256, 256);
+        //must be called to tell Drawable where it's drawn and how large should be. All Drawables should respect requested size, often simply by scaling their imagery.
+        background.setBounds(0, 0, 256, 256); //have drawable take up full bitmap
 
+        //Draw in its bounds (set via setBounds), respecting optional effects like alpha (set via setAlpha) and color filter (set via setColorFilter)
         background.draw(canvas);
 
         //create a new paint object
@@ -266,9 +274,10 @@ public class Square {
         //set antialiasing bit in the flags, which smooths out edges of what is being drawn
         textPaint.setAntiAlias(true);
 
-        //set the color of the paint
-        textPaint.setARGB(0xff, 0x00, 0x00, 0xdd);
+        //set the color of the text
+        textPaint.setARGB(0xFF, 0xFF, 0xFF, 0xFF);
 
+        //draw "NOSHAKE" on top of the square, centered
         canvas.drawText("NOSHAKE", 14, 135, textPaint); //WAS x:16, y:112
 
         //generate one texture ptr/names for textures (actually generates an int)
@@ -313,10 +322,10 @@ public class Square {
                                                 //when it gets to the fragment shader, it will hold an interpolated value for each pixel
 
                     "void main() {" + //the entry point for our vertex shader
-                    //the matrix must be included as modifier of gl_Position
-                    //NOTE: the uMVPMatrix factor MUST BE FIRST in order for matrix multiplication product to be correct
-                    "gl_Position = uMVPMatrix * vPosition;" + //gl_Position is special var used to store final position.
-                    "v_TexCoordinate = a_TexCoordinate;" +    //pass through the texture coordinate
+                        //the matrix must be included as modifier of gl_Position
+                        //NOTE: the uMVPMatrix factor MUST BE FIRST in order for matrix multiplication product to be correct
+                        "gl_Position = uMVPMatrix * vPosition;" + //gl_Position is special var used to store final position.
+                        "v_TexCoordinate = a_TexCoordinate;" +    //pass through the texture coordinate
                     "}";                                      //multiply the vertex by the matrix to get the final point in normalized screen coords
 
     //use to access and set the view transformation
@@ -330,7 +339,7 @@ public class Square {
                     "varying vec2 v_TexCoordinate;" + //interpolated texture coordinate per fragment. Passed in interpolated texture coords from vertex shader
 
                     "void main() {" +        //entry point to code
-                    "gl_FragColor = vColor * alpha * texture2D(u_Texture, v_TexCoordinate);" +   //pass the color directly through the pipeline
+                        "gl_FragColor = vColor * alpha * texture2D(u_Texture, v_TexCoordinate);" +   //pass the color directly through the pipeline
                     "}";                                                                    //multiply the color by texture val to get final output color
                                             //call texture2D(texture, textureCoordinate) to read in val of texture at current coordinate
 }
