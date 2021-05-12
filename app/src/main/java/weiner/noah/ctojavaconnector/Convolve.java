@@ -1,19 +1,25 @@
 package weiner.noah.ctojavaconnector;
 
 public class Convolve {
-    public static native void convolver(long bufferAddy, int axis);
+    private long nativeObjPtr;
 
-    public static native void convolver_destroy(int axis);
+    public Convolve(CircBuffer circBuffer, ImpulseResponse impulseResponse) {
+        convolver(circBuffer, impulseResponse);
+    }
 
-    public static native float convolve(int axis, int current_head);
+    public native void convolver(CircBuffer circBuffer, ImpulseResponse impulseResponse);
 
-    public static native float getYMember(int index, int axis);
+    public native void convolver_destroy();
 
-    public static native float getHMember(int index, int axis);
+    public native float convolve(int current_head);
 
-    public static native float getXMember(int index, int axis);
+    public native float getYMember(int index);
 
-    public static native float getTempXMember(int index, int axis);
+    public native float getHMember(int index);
 
-    public static native long getYSize(int axis);
+    public native float getXMember(int index);
+
+    public native float getTempXMember(int index);
+
+    public native long getYSize(int axis);
 }

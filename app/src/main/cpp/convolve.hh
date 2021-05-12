@@ -9,7 +9,7 @@
 
 class convolver {
 public:
-    convolver(long bufferAddy, int axis);
+    convolver(circular_buffer* circ_buff, impulse_resp_arr* imp_resp);
 
     ~convolver();
 

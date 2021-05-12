@@ -5,6 +5,7 @@
 #include <jni.h>
 #include <math.h>
 #include <assert.h>
+#include "utils.h"
 
 class impulse_resp_arr {
 public:
@@ -18,13 +19,15 @@ public:
 
     float impulse_response_arr_get_sum();
 
-    //public static property so can be used by convolver
-    static float* responseArray;
-    static size_t size;
-    static float eValue;
-    static float kValue;
-};
+    int impulse_resp_arr_get_size();
 
-static impulse_resp_arr* impulseResponses;
+    long impulse_resp_arr_get_data_address();
+
+    //public static property so can be used by convolver
+    float* responseArray;
+    size_t size;
+    float eValue;
+    float kValue;
+};
 
 #endif //NOSHAKE_IMPULSE_RESPONSE_HH

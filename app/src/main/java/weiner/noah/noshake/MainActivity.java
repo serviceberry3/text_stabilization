@@ -17,8 +17,8 @@ import android.widget.Toast;
 
 import java.util.List;
 
-import weiner.noah.NaiveConstants;
-import weiner.noah.NoShakeConstants;
+import weiner.noah.constants.NaiveConstants;
+import weiner.noah.constants.NoShakeConstants;
 import weiner.noah.openglbufftesting.OpenGLRenderer;
 import weiner.noah.openglbufftesting.OpenGLView;
 import weiner.noah.utils.Utils;
@@ -67,6 +67,11 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     //changes in x and y to be used to move the draggable text based on user's finger
     private int _xDelta, _yDelta;
 
+    private CircBuffer xBuff, yBuff, dispBuff;
+    private ImpulseResponse impulseResponse;
+    private Convolve xSignalConvolver;
+    private Convolve ySignalConvolver;
+
     //time variables, and the results of H(t) and Y(t) functions
     private double HofT, YofT, startTime, timeElapsed;
 
@@ -91,12 +96,13 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
     public static float toMoveX, toMoveY;
 
-    private ImplType mImplType;
+    //set stabilization implementation
+    private final ImplType mImplType = ImplType.LZ;
 
     //whether to use OpenGL for rendering
     private boolean USE_OPENGL_SQUARE_VERS = true;
 
-    //whether to apply the NoShake correction or leave text/square stagnant
+    //whether to apply the stabilization correction or leave text/square stagnant
     private boolean APPLY_CORRECTION = true;
 
     //log tag
@@ -118,8 +124,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         @Override
         public void run() {
             //write the x acceleration data into the circular buffer
-            Log.d("WRITER", String.format("Putting value %f", xAccel));
-            CircBuffer.circular_buf_put(xAccel, 0);
+            Log.d(TAG, String.format("Putting value %f", xAccel));
+            xBuff.circular_buf_put(xAccel);
         }
     }
 
@@ -128,15 +134,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         @Override
         public void run() {
             while (true) {
-                //DEBUG
-                //Log.d("DBUG", "Running thread");
-                //Log.d("HEAD", String.format("Head is %d", CircBuffer.circular_buf_get_head()));
-
                 //aggregate the last 50 entries in the circular buffer, taking average of x and y aggregations
-                float aggregation = (CircBuffer.aggregate_last_n_entries(50, 0) + CircBuffer.aggregate_last_n_entries(50, 1))/2;
-
-                //LOG the aggregation
-                //Log.d("AVERAGE", String.format("%f", aggregation));
+                float aggregation = (xBuff.aggregate_last_n_entries(50) + yBuff.aggregate_last_n_entries(50)) / 2;
 
                 //set the shaking flag appropriately
                 if (aggregation >= 0) {
@@ -156,7 +155,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         @Override
         public void run() {
             //wait until the size of the buffer is equal to the requested size
-            while (CircBuffer.circular_buf_size(0) < NoShakeConstants.BUFFER_SIZE) {
+            while (xBuff.circular_buf_size() < NoShakeConstants.BUFFER_SIZE) {
                 ;
             }
             waitingText.setVisibility(View.INVISIBLE);
@@ -168,25 +167,13 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-
-        //hide nav bar and status bar
+        //hide nav bar and status bar, make content full-screen
         getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LAYOUT_STABLE
                 | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
                 | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION // hide nav bar
-                | View.SYSTEM_UI_FLAG_FULLSCREEN // hide status bar
+                | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION //hide nav bar
+                | View.SYSTEM_UI_FLAG_FULLSCREEN //hide status bar
                 | View.SYSTEM_UI_FLAG_IMMERSIVE);
-
-
-        //requesting to turn the title OFF
-        //requestWindowFeature(Window.FEATURE_NO_TITLE);
-
-        //making it full screen
-        //getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN, WindowManager.LayoutParams.FLAG_FULLSCREEN);
-
-        //getSupportActionBar().hide(); //hide the title bar.
-
-        Log.i(TAG, "Initiating openglview...");
 
         //initiate the openGLView and create an instance with this activity
         openGLView = new OpenGLView(this);
@@ -195,23 +182,13 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         openGLView.setPreserveEGLContextOnPause(true);
 
+        //create our new custom OpenGL renderer block
         myRenderer = new OpenGLRenderer(this, MainActivity.this);
 
         openGLView.setRenderer(myRenderer);
 
-        //openGLView = (OpenGLView) findViewById(R.id.openGLView);
-
-        if (USE_OPENGL_SQUARE_VERS) {
-            //FOR OPENGL VERSION
-            setContentView(openGLView);
-        }
-        else {
-            //FOR ANDROID GRAPHICS VIEW VSION
-            setContentView(R.layout.activity_main);
-        }
-
-        //set implementation type
-        mImplType = ImplType.LZ;
+        //set content view to either OpenGL view or Android UI toolkit view
+        if (USE_OPENGL_SQUARE_VERS) setContentView(openGLView); else setContentView(R.layout.activity_main);
 
         //get the LinearLayout that contains the smiley
         smileyLayout = findViewById(R.id.smiley_layout);
@@ -228,23 +205,24 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         int height = displayMetrics.heightPixels;
         int width = displayMetrics.widthPixels;
 
-        //initialize a circular buffer of 211 floats
-        CircBuffer.circular_buffer(NoShakeConstants.BUFFER_SIZE, 0);
-        CircBuffer.circular_buffer(NoShakeConstants.BUFFER_SIZE, 1);
+        //initialize a circular float buffers
+        xBuff = new CircBuffer(NoShakeConstants.BUFFER_SIZE);
+        yBuff = new CircBuffer(NoShakeConstants.BUFFER_SIZE);
+        dispBuff = new CircBuffer(NoShakeConstants.BUFFER_SIZE);
 
         //initialize an impulse response array also of size 211
-        ImpulseResponse.impulse_resp_arr(NoShakeConstants.BUFFER_SIZE, NoShakeConstants.E, NoShakeConstants.SPRING_CONST);
+        impulseResponse = new ImpulseResponse(NoShakeConstants.BUFFER_SIZE, NoShakeConstants.E, NoShakeConstants.SPRING_CONST);
 
         //populate the H(t) impulse response array in C++ based on the selected spring constant
-        ImpulseResponse.impulse_response_arr_populate();
+        impulseResponse.impulse_response_arr_populate();
 
         //store sum of filter
-        impulseSum = ImpulseResponse.impulse_response_arr_get_sum();
-        Log.d("DBUG", String.format("Impulse sum is %f", impulseSum));
+        impulseSum = impulseResponse.impulse_response_arr_get_sum();
+        Log.d(TAG, String.format("Impulse sum is %f", impulseSum));
 
-        //instantiate a convolver which has a pointer to both the circular buffer and the impulse response array
-        Convolve.convolver(CircBuffer.circular_buf_address(0), 0);
-        Convolve.convolver(CircBuffer.circular_buf_address(1), 1);
+        //instantiate signal convolvers for both x and y acceleration signals
+        xSignalConvolver = new Convolve(xBuff, impulseResponse);
+        ySignalConvolver = new Convolve(yBuff, impulseResponse);
 
         //immediately start a looping thread that constantly reads the last 50 data and sets the "shaking" flag accordingly
         detectShaking shakeListener = new detectShaking();
@@ -330,8 +308,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         if (event.sensor.getType() == Sensor.TYPE_LINEAR_ACCELERATION) {
             //fill the temporary acceleration vector with the current sensor readings
             NtempAcc[0] = StempAcc[0] = Utils.rangeValue(event.values[0], -NaiveConstants.MAX_ACC, NaiveConstants.MAX_ACC);
-            NtempAcc[1] = StempAcc[0] = Utils.rangeValue(event.values[1], -NaiveConstants.MAX_ACC, NaiveConstants.MAX_ACC);
-            NtempAcc[2] = StempAcc[0] = Utils.rangeValue(event.values[2], -NaiveConstants.MAX_ACC, NaiveConstants.MAX_ACC);
+            NtempAcc[1] = StempAcc[1] = Utils.rangeValue(event.values[1], -NaiveConstants.MAX_ACC, NaiveConstants.MAX_ACC);
+            NtempAcc[2] = StempAcc[2] = Utils.rangeValue(event.values[2], -NaiveConstants.MAX_ACC, NaiveConstants.MAX_ACC);
 
             //apply lowpass filter and store results in acc float arrays
             Utils.lowPassFilter(NtempAcc, Nacc, NaiveConstants.LOW_PASS_ALPHA);
@@ -416,8 +394,9 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         timestamp = event.timestamp;
 
         //set the position of the text based on x and y axis values in position float array
-        smileyLayout.setTranslationX(-Nposition[0]);
-        smileyLayout.setTranslationY(Nposition[1]);
+        if (APPLY_CORRECTION) {
+            applyCorrection(-Nposition[1], -Nposition[0]);
+        }
     }
 
     //reset everything
@@ -429,19 +408,19 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         timestamp = 0;
 
         //destroy our instance of circular buffer and convolver
-        CircBuffer.circular_buffer_destroy(0);
-        CircBuffer.circular_buffer_destroy(1);
+        xBuff.circular_buffer_destroy();
+        yBuff.circular_buffer_destroy();
 
-        Convolve.convolver_destroy(0);
-        Convolve.convolver_destroy(1);
+        xSignalConvolver.convolver_destroy();
+        ySignalConvolver.convolver_destroy();
 
         //initialize a NEW circular buffer of 211 floats, for both x and y axes
-        CircBuffer.circular_buffer(NoShakeConstants.BUFFER_SIZE, 0);
-        CircBuffer.circular_buffer(NoShakeConstants.BUFFER_SIZE, 1);
+        xBuff = new CircBuffer(NoShakeConstants.BUFFER_SIZE);
+        yBuff = new CircBuffer(NoShakeConstants.BUFFER_SIZE);
 
         //initialize a NEW convolver for both x and y axes
-        Convolve.convolver(CircBuffer.circular_buf_address(0), 0);
-        Convolve.convolver(CircBuffer.circular_buf_address(1), 1);
+        xSignalConvolver = new Convolve(xBuff, impulseResponse);
+        ySignalConvolver = new Convolve(yBuff, impulseResponse);
 
         //set the NoShake text/graphic back to its original position
         smileyLayout.setTranslationX(0);
@@ -476,6 +455,29 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         return (Math.abs(valueInQuestion) <= thresh) ? 0 : valueInQuestion;
     }
 
+    public void applyCorrection(float toMoveX, float toMoveY) {
+        if (USE_OPENGL_SQUARE_VERS) {
+            //OPENGL VERSION
+            myRenderer.toMoveX = toMoveX / 1000f;
+
+            myRenderer.toMoveY = toMoveY / 1000f;
+        } else {
+            long time = System.nanoTime();
+
+            //ANDROID GRAPHICS VIEW VERSION
+            smileyLayout.setTranslationX(toMoveX);
+
+            time = System.nanoTime() - time;
+            Log.i(TAG, String.format("setTranslationX took %d ns", time));
+
+            //ANDROID GRAPHICS VIEW VERSION
+            smileyLayout.setTranslationY(toMoveY);
+
+            textLayout.setTranslationX(toMoveX);
+            textLayout.setTranslationY(toMoveY);
+        }
+    }
+
     //implementation of ZL's NoShake version
     private void noShake钟林(SensorEvent event) {
         //Log.i(TAG, "Accelerometer data(x, y, z): " + event.values[0] + ", " + event.values[1] + ", " + event.values[2]);
@@ -500,8 +502,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         accAfterFrix[1] = Sacc[1] - yFrixToApply;
 
         //add the x and y acceleration values to the circular buffer
-        int h = CircBuffer.circular_buf_put(accAfterFrix[0], 0);
-        int l = CircBuffer.circular_buf_put(accAfterFrix[1], 1);
+        int h = xBuff.circular_buf_put(accAfterFrix[0]);
+        int l = yBuff.circular_buf_put(accAfterFrix[1]);
 
         //DEBUGGING
         //Log.d("TIME", String.format("%f", timeElapsed));
@@ -534,17 +536,17 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         //OPTIONAL: check to see whether the device is shaking
         //if (shaking==1) { //empirically-determined threshold in order to keep text still when not really shaking
             //convolve the circular buffer of acceleration data with the impulse response array to get Y(t) array
-            float f = Convolve.convolve(0, CircBuffer.circular_buf_get_head(0));
-            float y = Convolve.convolve(1, CircBuffer.circular_buf_get_head(1));
+            float f = xSignalConvolver.convolve(xBuff.circular_buf_get_head());
+            float y = ySignalConvolver.convolve(yBuff.circular_buf_get_head());
 
             float deltaX = 0;
             float deltaY = 0;
 
             //do calculations
             for (int i = 0; i < NoShakeConstants.BUFFER_SIZE; i++) {
-                float impulseValue = ImpulseResponse.impulse_response_arr_get_value(i);
-                deltaX += impulseValue * Convolve.getTempXMember(i, 0);
-                deltaY += impulseValue * Convolve.getTempXMember(i, 1);
+                float impulseValue = impulseResponse.impulse_response_arr_get_value(i);
+                deltaX += impulseValue * xSignalConvolver.getTempXMember(i);
+                deltaY += impulseValue * ySignalConvolver.getTempXMember(i);
             }
 
             //normalize the scale of filters with arbitrary length/magnitude
@@ -553,39 +555,20 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
             //calculate how much we need to move text in Y direction for this frame
             toMoveY = -1 *                                                              //flip
-                    (deltaX - NaiveConstants.POSITION_FRICTION_DEFAULT * deltaX)        //reduce deltaX by adding some friction. Use deltaX for Y displacement b/c screen is horizontal
+                    (deltaX - NoShakeConstants.POSITION_FRICTION_DEFAULT * deltaX)        //reduce deltaX by adding some friction. Use deltaX for Y displacement b/c screen is horizontal
                     * NoShakeConstants.Y_FACTOR;                                         //arbitrary scaling factor
             //Log.d("DBUG", String.format("To move x is %f", toMoveX));
 
 
             //calculate how much we needto move text in x direction for this frame
             toMoveX = -1 *                                                               //flip
-                (deltaY - NaiveConstants.POSITION_FRICTION_DEFAULT * deltaY)         //reduce deltaY by adding some friction. Use deltaY for X displacement b/c screen is horizontal
+                (deltaY - NoShakeConstants.POSITION_FRICTION_DEFAULT * deltaY)         //reduce deltaY by adding some friction. Use deltaY for X displacement b/c screen is horizontal
                 * NoShakeConstants.Y_FACTOR;                                          //arbitrary scaling factor
 
             //Log.i(TAG, "Corrections to be made are " + toMoveX + " on x axis and " + toMoveY + " on y axis");
 
             if (APPLY_CORRECTION) {
-                if (USE_OPENGL_SQUARE_VERS) {
-                    //OPENGL VERSION
-                    myRenderer.toMoveX = toMoveX / 1000f;
-
-                    myRenderer.toMoveY = toMoveY / 1000f;
-                } else {
-                    long time = System.nanoTime();
-
-                    //ANDROID GRAPHICS VIEW VERSION
-                    smileyLayout.setTranslationX(toMoveX);
-
-                    time = System.nanoTime() - time;
-                    Log.i(TAG, String.format("setTranslationX took %d ns", time));
-
-                    //ANDROID GRAPHICS VIEW VERSION
-                    smileyLayout.setTranslationY(toMoveY);
-
-                    textLayout.setTranslationX(toMoveX);
-                    textLayout.setTranslationY(toMoveY);
-                }
+                applyCorrection(toMoveX, toMoveY);
             }
 
             /*

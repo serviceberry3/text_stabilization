@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <assert.h>
 #include <stdlib.h>
+#include "utils.h"
 
 class circular_buffer {
 public:
@@ -61,10 +62,6 @@ private:
     int max; //maximum size of the buffer
     bool full;
 };
-
-//a circular buffer instance
-static circular_buffer* x_buff = NULL;
-static circular_buffer* y_buff = NULL;
 
 #endif //NOSHAKE_CIRC_BUFFER_HH
 
