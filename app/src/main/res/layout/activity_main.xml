@@ -10,13 +10,13 @@
     <TextView
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text = "PLEASE WAIT..."
+        android:text = ""
         android:textSize="20dp"
         android:textColor="@color/colorPrimary"
         android:layout_marginTop="10dp"
         android:id="@+id/waiting_text"
         android:layout_centerHorizontal="true"/>
-<!--
+    <!--
     <TextView
         android:id="@+id/movable_text"
         android:layout_width="wrap_content"
@@ -25,7 +25,7 @@
         android:layout_marginTop="200dp"
         android:text="ClickandDragTEST"
         android:textSize="30dp" /> -->
-<!--
+    <!--
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -88,25 +88,31 @@
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_above="@+id/x_axis"
         android:clipChildren="false">
 
         <LinearLayout
-            android:id="@+id/layout_sensor"
+            android:id="@+id/smiley_layout"
+            android:layout_width="350dp"
+            android:layout_height="350dp"
+            android:layout_marginTop="30dp"
+            android:layout_marginLeft="230dp"
+            android:orientation="horizontal"
+            android:background="@drawable/smiley">
+        </LinearLayout>
+
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:layout_margin="20dp"
-            android:orientation="horizontal">
-
+            android:id="@+id/text_layout">
 
             <TextView
                 android:id="@+id/txt_test"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginLeft="55dp"
-                android:layout_marginTop="100dp"
-                android:text="@string/noshake_text"
-                android:textSize="35sp" />
+                android:layout_marginLeft="80dp"
+                android:layout_marginTop="160dp"
+                android:text="@string/noshake_text_reassure"
+                android:textSize="60sp" />
 
         </LinearLayout>
 

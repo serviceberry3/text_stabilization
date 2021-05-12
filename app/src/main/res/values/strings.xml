@@ -7,4 +7,6 @@
         like Aldus PageMaker including versions of Lorem Ipsum.</string>
     <string name="noshake_text">This is a test of the NoShake functionality. It\'s a high-level version of NoShake
         using the full Android graphics pipeline. Rendering looks a little slow. Can you read this text?</string>
+    <string name="noshake_text_instruct">Hello! Please follow me as I guide you to the entrance.</string>
+    <string name="noshake_text_reassure">Waiting to be summoned!</string>
 </resources>

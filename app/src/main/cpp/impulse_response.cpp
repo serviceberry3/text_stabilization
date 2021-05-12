@@ -36,7 +36,7 @@ void impulse_resp_arr::impulse_response_arr_populate() {
     }
      */
 
-    for (int t=0; t<size; t++) {
+    for (int t = 0; t < size; t++) {
         responseArray[size-1-t] = (float)(t+TAU)/HZ * pow(eValue, -(float)(t+TAU)/HZ * sqrtK);
     }
 }

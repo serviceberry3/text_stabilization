@@ -1,2 +1,10 @@
-An Android app to stabilize text on the screen in case of shaking. So far I've developed a basic naive physics implementation--it just uses the linear accelerometer data to calculate the displacement of the phone and adjusts the text in the opposite direction, with adjustable friction factors. I've also implemented a version from Lin Zhong's NoShake paper, which models a spring-dampener system on the screen on the x and y axes. You can switch between the two versions by uncommenting the appropriate function call within the onSensorChanged function. Adjustable constants for the naive implementation are in NaiveConstants.java, and constants for the spring implementation are in NoShakeConstants.java. The spring implementation uses a circular buffer C++ API, along with some other C++ APIs via Android NDK.   
-UPDATE: the rendering is now done using OpenGL ES code. Coming soon is a more efficient version of the rendering which modifies native Android graphics pipeline framework to avoid re-rendering work on each frame. Look for another repository.
+# A Content Stabilization Solution for Smartphones #
+
+An Android app to stabilize text or other screen content in case of shaking. Three implementations to choose from:
+* Naive physics implementation--it uses the linear accelerometer data to integrate displacement of the phone and adjusts the text in the opposite direction, with adjustable friction factors.
+* Lin Zhong's NoShake paper, which models a spring-dampener system on the screen on the x and y axes. 
+* Another system model using the recurrent least-squares estimation algorithm, based on paper by Wei, Hsiao, Jiang.    
+
+You can switch between the versions by changing the ```mImplType``` variable at the top of MainActivity. Adjustable constants for each implementation are in *Constants.java. The two system model implementations use a circular buffer C++ API and some other C++ APIs via the Android NDK. Rendering is done using OpenGL ES code.  
+
+Compare to [this](https://github.com/serviceberry3/noshake_lowest) test version in C, which interacts directly with the Direct Rendering Manager to draw on the screen.  

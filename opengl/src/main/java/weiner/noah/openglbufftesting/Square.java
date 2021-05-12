@@ -2,19 +2,18 @@ package weiner.noah.openglbufftesting;
 
 import android.content.Context;
 import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.drawable.Drawable;
 import android.opengl.GLES20;
 import android.opengl.GLUtils;
+import android.util.Log;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
 import java.nio.ShortBuffer;
 
-import javax.microedition.khronos.opengles.GL;
 import javax.microedition.khronos.opengles.GL10;
 
 public class Square {
@@ -30,7 +29,7 @@ public class Square {
     private int positionHandle;
     private int colorHandle;
 
-    // number of coordinates per vertex in this array
+    //number of coordinates per vertex in this array
     static final int COORDS_PER_VERTEX = 3;
 
     /*
@@ -40,18 +39,30 @@ public class Square {
             0.3f, -0.3f, 0.0f,   //bottom right
             0.3f, 0.3f, 0.0f   //top right
     };
-
      */
 
-    private float vertices[] = {
-            -0.3f, 0.3f, 0.0f,   //top left
-            -0.3f, -0.3f, 0.0f,  //bottom left
-            0.3f, -0.3f, 0.0f,   //bottom right
-            0.3f, 0.3f, 0.0f   //top right
+    private final float[][] vertices = {
+    { //was .45
+            1.1f, 0.45f, 0.0f,   //top left
+            1.1f, -0.45f, 0.0f,  //bottom left
+            2.0f, -0.45f, 0.0f,   //bottom right
+            2.0f, 0.45f, 0.0f   //top right
+    },
+
+    {
+            -0.9f, 0.45f, 0.0f,   //top left
+            -0.9f, -0.45f, 0.0f,  //bottom left
+            0.0f, -0.45f, 0.0f,   //bottom right
+            0.0f, 0.45f, 0.0f   //top right
+    }
+
     };
 
 
     private final int vertexCount = vertices.length / COORDS_PER_VERTEX;
+
+    private final String noshake_txt = "NoShake";
+    private final String TAG = "Square";
 
     //how much memory space each vertex takes up
     private final int vertexStride = COORDS_PER_VERTEX * 4; // 4 bytes per vertex
@@ -93,12 +104,16 @@ public class Square {
     // Set color with red, green, blue and alpha (opacity) values
     //float[] color = {0.63671875f, 0.76953125f, 0.22265625f, 1.0f};
 
-    //greenish
-    float[] color1 = {0.5f, 0.7f, 0.3f, 1.0f};
-    //black
-    float[] color2 = {0.0f, 0.0f, 0.0f, 1.0f};
+    //greenish, black, green, blue
+    float[][] colors = {{0.5f, 0.7f, 0.3f, 1.0f}, {0.0f, 0.0f, 0.0f, 1.0f}, {0.0f, 1.0f, 0.0f, 1.0f}, {0.0f, 0.0f, 1.0f, 1.0f}};
 
-    public Square() {
+    private final int color, selectedVertices;
+
+    public Square(int color, int side) {
+        this.color = color;
+
+        this.selectedVertices = side;
+
         //load the vertex shader
         int vertexShader = OpenGLRenderer.loadShader(GLES20.GL_VERTEX_SHADER, vertexShaderCode);
 
@@ -118,7 +133,7 @@ public class Square {
         GLES20.glLinkProgram(mProgram);
 
         //a float has 4 bytes so we allocate 4 bytes for each coordinate
-        ByteBuffer vertexByteBuffer = ByteBuffer.allocateDirect(vertices.length * 4);
+        ByteBuffer vertexByteBuffer = ByteBuffer.allocateDirect(vertices[this.selectedVertices].length * 4);
 
         vertexByteBuffer.order(ByteOrder.nativeOrder());
 
@@ -126,7 +141,7 @@ public class Square {
         vertexBuffer = vertexByteBuffer.asFloatBuffer();
 
         //fill the vertexBuffer with the vertices
-        vertexBuffer.put(vertices);
+        vertexBuffer.put(vertices[this.selectedVertices]);
 
         //set the cursor position to the beginning of the buffer
         vertexBuffer.position(0);
@@ -171,13 +186,13 @@ public class Square {
         //GLES20.glClearColor(0.0f, 0.0f,0.0f,0.5f);
 
         //clear the color buffer (bitmaps) -- clear screen and depth buffer
-        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT | GLES20.GL_DEPTH_BUFFER_BIT);
+        //GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT | GLES20.GL_DEPTH_BUFFER_BIT);
 
         //get fragment shader's vColor member
         colorHandle = GLES20.glGetUniformLocation(mProgram, "vColor");
 
         //set color for square -- values of RGB floats are between 0 and 1 inclusive
-        GLES20.glUniform4fv(colorHandle, 1, color2, 0);
+        GLES20.glUniform4fv(colorHandle, 1, colors[color], 0);
 
         GLES20.glDisable(GLES20.GL_CULL_FACE);
 
@@ -256,8 +271,16 @@ public class Square {
         canvas = new Canvas(bitmap);
         bitmap.eraseColor(0);
 
-        //set the square background
-        background = context.getResources().getDrawable(R.drawable.black_box);
+        //set the square background based on selected color
+        switch (color) {
+            case 0:
+                Log.i(TAG, "Color is 0");
+                background = context.getResources().getDrawable(R.drawable.green_box);
+                break;
+            case 3:
+                background = context.getResources().getDrawable(R.drawable.blue_box);
+                break;
+        }
 
         //must be called to tell Drawable where it's drawn and how large should be. All Drawables should respect requested size, often simply by scaling their imagery.
         background.setBounds(0, 0, 256, 256); //have drawable take up full bitmap
@@ -275,10 +298,10 @@ public class Square {
         textPaint.setAntiAlias(true);
 
         //set the color of the text
-        textPaint.setARGB(0xFF, 0xFF, 0xFF, 0xFF);
+        textPaint.setARGB(0x00, 0xFF, 0xFF, 0xFF);
 
         //draw "NOSHAKE" on top of the square, centered
-        canvas.drawText("NOSHAKE", 14, 135, textPaint); //WAS x:16, y:112
+        canvas.drawText(noshake_txt, 14, 135, textPaint); //WAS x:16, y:112
 
         //generate one texture ptr/names for textures (actually generates an int)
         GLES20.glGenTextures(1, textures, 0);

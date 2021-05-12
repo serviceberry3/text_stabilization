@@ -44,7 +44,7 @@ float convolver::convolve(int current_head) {
     {
         for (int j = 0; j < hLength; j++)
         {
-            yArray[i+j] += tempXArray[i] * hArray[j];
+            yArray[i + j] += tempXArray[i] * hArray[j];
         }
     }
 

@@ -8,21 +8,14 @@ import android.graphics.Paint;
 import android.graphics.drawable.Drawable;
 import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
-import android.opengl.GLU;
-import android.opengl.GLUtils;
 import android.opengl.Matrix;
 import android.os.SystemClock;
 import android.util.DisplayMetrics;
 import android.util.Log;
-import android.widget.Toast;
 
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
-import java.nio.FloatBuffer;
 import java.nio.IntBuffer;
 
 import javax.microedition.khronos.egl.EGLConfig;
-import javax.microedition.khronos.opengles.GL;
 import javax.microedition.khronos.opengles.GL10;
 
 /*
@@ -40,7 +33,7 @@ public class OpenGLRenderer implements GLSurfaceView.Renderer {
     private Paint textPaint;
     private Drawable background;
     private Triangle mTriangle;
-    private Square mSquare;
+    private Square mSquareLeft, mSquareRight;
     private ScreenShader mScreenShader;
 
     private int factor = 1;
@@ -82,6 +75,26 @@ public class OpenGLRenderer implements GLSurfaceView.Renderer {
     IntBuffer texBuffer;          //  Buffer to store the texture
 
     private final String TAG = "OpenGLRenderer";
+
+    //set up the camera
+
+    //Point where the 3D virtual camera is located in the scene
+    //Position the eye in front of the origin
+    final float eyeX = 0f;
+    final float eyeY = 0f;
+    final float eyeZ = 3f; //WAS 1.5
+
+    //Where we should look (a position)
+    //We are looking toward the distance, towards negative Z
+    final float lookX = 0.0f;
+    final float lookY = 0.0f;
+    final float lookZ = -1f; //WAS -5 or -1.5
+
+    //Set our up vector. This is where our head would be pointing were we holding the camera.
+    final float upX = 0.0f;
+    final float upY = 1.0f; //up vector aligned with Y axis of camera coordinate system
+    final float upZ = 0.0f;
+
 
     public OpenGLRenderer(Context context, Activity activity) {
         //provide the application context to the square object because the obj itself loads the texture and needs to know the path to the bitmap
@@ -146,11 +159,14 @@ public class OpenGLRenderer implements GLSurfaceView.Renderer {
 
         //instantiate some OpenGL drawing programs: a triangle, square, and screenshader
         mTriangle = new Triangle();
-        mSquare = new Square();
+        mSquareLeft = new Square(3, 0);
+        mSquareRight = new Square(0, 1);
+
         mScreenShader = new ScreenShader();
 
-        //load the texture for the square (solid black box), provide the context to our renderer so we can load up the texture at startup
-        mSquare.loadGLTexture(gl, this.myContext);
+        //load the texture for the square (solid box), provide the context to our renderer so we can load up the texture at startup
+        mSquareLeft.loadGLTexture(gl, this.myContext);
+        mSquareRight.loadGLTexture(gl, this.myContext);
 
         //mScreenShader.loadGLTexture(gl, this.myContext);
 
@@ -195,30 +211,37 @@ public class OpenGLRenderer implements GLSurfaceView.Renderer {
 
         float posTrans = (time / 4000f) * 0.1f;
 
-        //set up the camera
+        //set camera position. NOTE: in Opengl 1, a ModelView matrix is used (a combo of a model and a view matrix). In 2.0, can keep track of these matrices separately.
+        Matrix.setLookAtM(viewMatrix, 0, eyeX, eyeY, eyeZ, lookX, lookY, lookZ, upX, upY, upZ);
 
-        //Point where the 3D virtual camera is located in the scene
-        //Position the eye in front of the origin
-        final float eyeX = 0f;
-        final float eyeY = 0f;
-        final float eyeZ = 3f; //WAS 1.5
+        //set model matrix to identity matrix
+        Matrix.setIdentityM(mModelMatrix, 0);
 
-        //Where we should look (a position)
-        //We are looking toward the distance, towards negative Z
-        final float lookX = 0.0f;
-        final float lookY = 0.0f;
-        final float lookZ = -1f; //WAS -5 or -1.5
 
-        //Set our up vector. This is where our head would be pointing were we holding the camera.
-        final float upX = 0.0f;
-        final float upY = 1.0f; //up vector aligned with Y axis of camera coordinate system
-        final float upZ = 0.0f;
+        Matrix.translateM(mModelMatrix, 0, 0.0f, 0.0f, 0); // translation to the left     was 0.9, 1.8
+
+        //set rotation matrix using angle calculated
+        Matrix.setRotateM(rotationMatrix, 0, 180, 0, 0, 1); //was angle instead of 180
+
+        //multiply model matrix (identity matrix) by rotation matrix
+        Matrix.multiplyMM(vPMatrix, 0, mModelMatrix, 0, rotationMatrix, 0);
+
+        //calculate projection and view transformation, using projectionMatrix defined in onSurfaceChanged()
+        Matrix.multiplyMM(vPMatrix, 0, projectionMatrix, 0, vPMatrix, 0); //2nd to last was vPMatrix
+
+        //combine rotation matrix with the projection and camera view
+        //note that vPMatrix factor MUST BE FIRST in order for matrix multiplication product to be correct
+        Matrix.multiplyMM(scratch, 0, vPMatrix, 0, viewMatrix, 0);
+
+        mSquareLeft.draw(scratch);
 
         //set camera position. NOTE: in Opengl 1, a ModelView matrix is used (a combo of a model and a view matrix). In 2.0, can keep track of these matrices separately.
         Matrix.setLookAtM(viewMatrix, 0, eyeX, eyeY, eyeZ, lookX, lookY, lookZ, upX, upY, upZ);
 
         //set model matrix to identity matrix
         Matrix.setIdentityM(mModelMatrix, 0);
+
+
         Matrix.translateM(mModelMatrix, 0, 0.0f + toMoveX, 0.0f - toMoveY, 0); // translation to the left     was 0.9, 1.8
 
         //set rotation matrix using angle calculated
@@ -240,7 +263,7 @@ public class OpenGLRenderer implements GLSurfaceView.Renderer {
 
         //GLES20.glViewport(0,0,1080 * 4,2236 * 4); // Render on the whole framebuffer, complete from the lower left corner to the upper right
 
-        mSquare.draw(scratch);
+        mSquareRight.draw(scratch);
 
         //bind the actual screen
         //GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);

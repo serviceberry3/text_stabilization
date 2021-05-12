@@ -9,17 +9,12 @@ import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
-import android.view.Window;
-import android.view.WindowManager;
-import android.widget.Button;
 import android.widget.RelativeLayout;
-import android.widget.ShareActionProvider;
 import android.widget.TextView;
 import android.hardware.SensorEventListener;
 import android.hardware.SensorEvent;
 import android.widget.Toast;
 
-import java.util.ArrayList;
 import java.util.List;
 
 import weiner.noah.NaiveConstants;
@@ -55,7 +50,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private long timestamp = 0;
 
     //the view to be stabilized
-    private View layoutSensor, waitingText;
+    private View smileyLayout, waitingText, textLayout;
 
     //the text that can be dragged around (compare viewing of this text to how the stabilized text looks)
     private TextView noShakeText;
@@ -95,6 +90,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private OpenGLView openGLView;
 
     public static float toMoveX, toMoveY;
+
+    private ImplType mImplType;
 
     //whether to use OpenGL for rendering
     private boolean USE_OPENGL_SQUARE_VERS = true;
@@ -143,7 +140,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
                 //set the shaking flag appropriately
                 if (aggregation >= 0) {
-                    if (aggregation >= NoShakeConstants.shaking_threshold) {
+                    if (aggregation >= NoShakeConstants.SHAKING_THRESHOLD) {
                         shaking = 1;
                     }
                     else {
@@ -159,7 +156,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         @Override
         public void run() {
             //wait until the size of the buffer is equal to the requested size
-            while (CircBuffer.circular_buf_size(0) < NoShakeConstants.buffer_size) {
+            while (CircBuffer.circular_buf_size(0) < NoShakeConstants.BUFFER_SIZE) {
                 ;
             }
             waitingText.setVisibility(View.INVISIBLE);
@@ -213,15 +210,17 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             setContentView(R.layout.activity_main);
         }
 
+        //set implementation type
+        mImplType = ImplType.LZ;
 
-        layoutSensor = findViewById(R.id.layout_sensor);
-        //noShakeText = findViewById(R.id.movable_text); //get the NoShake sample text as a TextView so we can move it around (TextView)
+        //get the LinearLayout that contains the smiley
+        smileyLayout = findViewById(R.id.smiley_layout);
+
+        //get the "Please Wait..." text
         waitingText = findViewById(R.id.waiting_text);
 
-        /*
-        originalLayoutParams = (RelativeLayout.LayoutParams) noShakeText.getLayoutParams();
-        ogLeftMargin = originalLayoutParams.leftMargin;
-        ogTopMargin = originalLayoutParams.topMargin;*/
+        //get the LinearLayout that contains the body text
+        textLayout = findViewById(R.id.text_layout);
 
         //get pixel dimensions of screen
         DisplayMetrics displayMetrics = new DisplayMetrics();
@@ -230,11 +229,11 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         int width = displayMetrics.widthPixels;
 
         //initialize a circular buffer of 211 floats
-        CircBuffer.circular_buffer(NoShakeConstants.buffer_size, 0);
-        CircBuffer.circular_buffer(NoShakeConstants.buffer_size, 1);
+        CircBuffer.circular_buffer(NoShakeConstants.BUFFER_SIZE, 0);
+        CircBuffer.circular_buffer(NoShakeConstants.BUFFER_SIZE, 1);
 
         //initialize an impulse response array also of size 211
-        ImpulseResponse.impulse_resp_arr(NoShakeConstants.buffer_size, NoShakeConstants.e, NoShakeConstants.spring_const);
+        ImpulseResponse.impulse_resp_arr(NoShakeConstants.BUFFER_SIZE, NoShakeConstants.E, NoShakeConstants.SPRING_CONST);
 
         //populate the H(t) impulse response array in C++ based on the selected spring constant
         ImpulseResponse.impulse_response_arr_populate();
@@ -247,18 +246,15 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         Convolve.convolver(CircBuffer.circular_buf_address(0), 0);
         Convolve.convolver(CircBuffer.circular_buf_address(1), 1);
 
-
         //immediately start a looping thread that constantly reads the last 50 data and sets the "shaking" flag accordingly
         detectShaking shakeListener = new detectShaking();
         new Thread(shakeListener).start();
-
 
         //display PLEASE WAIT text while circ buffer is filling up with data
         if (!USE_OPENGL_SQUARE_VERS) {
             bufferWait waitingTextThread = new bufferWait();
             new Thread(waitingTextThread).start();
         }
-
 
         gravity[0] = gravity[1] = gravity[2] = 0;
         accelBuffer[0] = accelBuffer[1] = accelBuffer[2] = 0;
@@ -332,13 +328,29 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     @Override
     public void onSensorChanged(SensorEvent event) {
         if (event.sensor.getType() == Sensor.TYPE_LINEAR_ACCELERATION) {
-            //layoutSensor.setVisibility(View.INVISIBLE);
+            //fill the temporary acceleration vector with the current sensor readings
+            NtempAcc[0] = StempAcc[0] = Utils.rangeValue(event.values[0], -NaiveConstants.MAX_ACC, NaiveConstants.MAX_ACC);
+            NtempAcc[1] = StempAcc[0] = Utils.rangeValue(event.values[1], -NaiveConstants.MAX_ACC, NaiveConstants.MAX_ACC);
+            NtempAcc[2] = StempAcc[0] = Utils.rangeValue(event.values[2], -NaiveConstants.MAX_ACC, NaiveConstants.MAX_ACC);
 
-            //noShake implementation
-            noShake钟林(event);
+            //apply lowpass filter and store results in acc float arrays
+            Utils.lowPassFilter(NtempAcc, Nacc, NaiveConstants.LOW_PASS_ALPHA);
+            Utils.lowPassFilter(StempAcc, Sacc, NoShakeConstants.LOW_PASS_ALPHA);
 
-            //more naive implementation
-            //naivePhysicsImplementation(event);
+            switch (mImplType) {
+                case NAIVE:
+                    //more naive implementation
+                    naivePhysicsImplementation(event);
+                    break;
+                case LZ:
+                    //impl from NoShake paper
+                    noShake钟林(event);
+                    break;
+                case LSE:
+                    //impl from Chang Gung paper
+                    lseSystemModel(event);
+                    break;
+            }
         }
     }
 
@@ -366,14 +378,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     public void naivePhysicsImplementation(SensorEvent event) {
         if (timestamp != 0)
         {
-            //fill the temporary acceleration vector with the current sensor readings
-            NtempAcc[0] = Utils.rangeValue(event.values[0], -NaiveConstants.MAX_ACC, NaiveConstants.MAX_ACC);
-            NtempAcc[1] = Utils.rangeValue(event.values[1], -NaiveConstants.MAX_ACC, NaiveConstants.MAX_ACC);
-            NtempAcc[2] = Utils.rangeValue(event.values[2], -NaiveConstants.MAX_ACC, NaiveConstants.MAX_ACC);
-
-            //apply lowpass filter and store results in acc float array
-            Utils.lowPassFilter(NtempAcc, Nacc, NaiveConstants.LOW_PASS_ALPHA);
-
             //get change in time, convert from nanoseconds to seconds
             float dt = (event.timestamp - timestamp) * NaiveConstants.NANOSEC_TO_SEC;
 
@@ -412,8 +416,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         timestamp = event.timestamp;
 
         //set the position of the text based on x and y axis values in position float array
-        layoutSensor.setTranslationX(-Nposition[0]);
-        layoutSensor.setTranslationY(Nposition[1]);
+        smileyLayout.setTranslationX(-Nposition[0]);
+        smileyLayout.setTranslationY(Nposition[1]);
     }
 
     //reset everything
@@ -432,16 +436,19 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         Convolve.convolver_destroy(1);
 
         //initialize a NEW circular buffer of 211 floats, for both x and y axes
-        CircBuffer.circular_buffer(NoShakeConstants.buffer_size, 0);
-        CircBuffer.circular_buffer(NoShakeConstants.buffer_size, 1);
+        CircBuffer.circular_buffer(NoShakeConstants.BUFFER_SIZE, 0);
+        CircBuffer.circular_buffer(NoShakeConstants.BUFFER_SIZE, 1);
 
         //initialize a NEW convolver for both x and y axes
         Convolve.convolver(CircBuffer.circular_buf_address(0), 0);
         Convolve.convolver(CircBuffer.circular_buf_address(1), 1);
 
-        //set the NoShake text back to its original position
-        layoutSensor.setTranslationX(0);
-        layoutSensor.setTranslationY(0);
+        //set the NoShake text/graphic back to its original position
+        smileyLayout.setTranslationX(0);
+        smileyLayout.setTranslationY(0);
+
+        textLayout.setTranslationX(0);
+        textLayout.setTranslationY(0);
     }
 
     //check to see if accelerometer is connected; print out the sensors found via Toasts
@@ -465,13 +472,13 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         return 0;
     }
 
+    public float knockLowsToZero(float valueInQuestion, float thresh) {
+        return (Math.abs(valueInQuestion) <= thresh) ? 0 : valueInQuestion;
+    }
+
     //implementation of ZL's NoShake version
     private void noShake钟林(SensorEvent event) {
-        StempAcc[0] = Utils.rangeValue(event.values[0], -NaiveConstants.MAX_ACC, NaiveConstants.MAX_ACC);
-        StempAcc[1] = Utils.rangeValue(event.values[1], -NaiveConstants.MAX_ACC, NaiveConstants.MAX_ACC);
-
-        //apply the low pass filter to reduce noise
-        Utils.lowPassFilter(StempAcc, Sacc, NoShakeConstants.low_pass_alpha);
+        //Log.i(TAG, "Accelerometer data(x, y, z): " + event.values[0] + ", " + event.values[1] + ", " + event.values[2]);
 
         /*
         //EXPERIMENTAL: to speed things up, start a separate thread to go write the acceleration data to the buffer while we finish calculations here
@@ -480,17 +487,13 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
          */
 
         //try to eliminate noise by knocking low acceleration values down to 0 (also make text re-center faster)
-        if (Math.abs(Sacc[0]) <= 0.5) {
-            Sacc[0] = 0;
-        }
-        if (Math.abs(Sacc[1]) <= 0.5) {
-            Sacc[1] = 0;
-        }
+        Sacc[0] = knockLowsToZero(Sacc[0], NoShakeConstants.TO_ZERO_THRESH);
+        Sacc[1] = knockLowsToZero(Sacc[1], NoShakeConstants.TO_ZERO_THRESH);
 
         //apply some extra friction (hope is to make text return to center of screen a little faster)
         //rapid decreases will be highlighted by this
-        float xFrixToApply = accAfterFrix[0] * NoShakeConstants.extra_frix_const;
-        float yFrixToApply = accAfterFrix[1] * NoShakeConstants.extra_frix_const;
+        float xFrixToApply = accAfterFrix[0] * NoShakeConstants.EXTRA_FRIX_CONST;
+        float yFrixToApply = accAfterFrix[1] * NoShakeConstants.EXTRA_FRIX_CONST;
 
         //apply the friction to get new x and y acceleration values
         accAfterFrix[0] = Sacc[0] - xFrixToApply;
@@ -530,7 +533,6 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         //OPTIONAL: check to see whether the device is shaking
         //if (shaking==1) { //empirically-determined threshold in order to keep text still when not really shaking
-
             //convolve the circular buffer of acceleration data with the impulse response array to get Y(t) array
             float f = Convolve.convolve(0, CircBuffer.circular_buf_get_head(0));
             float y = Convolve.convolve(1, CircBuffer.circular_buf_get_head(1));
@@ -539,7 +541,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             float deltaY = 0;
 
             //do calculations
-            for (int i=0; i < NoShakeConstants.buffer_size; i++) {
+            for (int i = 0; i < NoShakeConstants.BUFFER_SIZE; i++) {
                 float impulseValue = ImpulseResponse.impulse_response_arr_get_value(i);
                 deltaX += impulseValue * Convolve.getTempXMember(i, 0);
                 deltaY += impulseValue * Convolve.getTempXMember(i, 1);
@@ -552,16 +554,16 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             //calculate how much we need to move text in Y direction for this frame
             toMoveY = -1 *                                                              //flip
                     (deltaX - NaiveConstants.POSITION_FRICTION_DEFAULT * deltaX)        //reduce deltaX by adding some friction. Use deltaX for Y displacement b/c screen is horizontal
-                    * NoShakeConstants.yFactor;                                         //arbitrary scaling factor
+                    * NoShakeConstants.Y_FACTOR;                                         //arbitrary scaling factor
             //Log.d("DBUG", String.format("To move x is %f", toMoveX));
 
 
             //calculate how much we needto move text in x direction for this frame
             toMoveX = -1 *                                                               //flip
                 (deltaY - NaiveConstants.POSITION_FRICTION_DEFAULT * deltaY)         //reduce deltaY by adding some friction. Use deltaY for X displacement b/c screen is horizontal
-                * NoShakeConstants.yFactor;                                          //arbitrary scaling factor
+                * NoShakeConstants.Y_FACTOR;                                          //arbitrary scaling factor
 
-
+            //Log.i(TAG, "Corrections to be made are " + toMoveX + " on x axis and " + toMoveY + " on y axis");
 
             if (APPLY_CORRECTION) {
                 if (USE_OPENGL_SQUARE_VERS) {
@@ -570,17 +572,19 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
                     myRenderer.toMoveY = toMoveY / 1000f;
                 } else {
-
                     long time = System.nanoTime();
 
                     //ANDROID GRAPHICS VIEW VERSION
-                    layoutSensor.setTranslationX(toMoveX);
+                    smileyLayout.setTranslationX(toMoveX);
 
                     time = System.nanoTime() - time;
-                    Log.i("TIMER", String.format("setTranslationX took %d ns", time));
+                    Log.i(TAG, String.format("setTranslationX took %d ns", time));
 
                     //ANDROID GRAPHICS VIEW VERSION
-                    layoutSensor.setTranslationY(toMoveY);
+                    smileyLayout.setTranslationY(toMoveY);
+
+                    textLayout.setTranslationX(toMoveX);
+                    textLayout.setTranslationY(toMoveY);
                 }
             }
 
@@ -595,8 +599,12 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             for (int i=0; i<Convolve.getYSize(); i++) {
                 Log.d("YARRAY", String.format("Index %d: %f", i, Convolve.getYMember(i)));
             }
-             */
+            */
 
         //} //OPTIONAL: check to see whether the device is shaking
+    }
+
+    private void lseSystemModel(SensorEvent event) {
+
     }
 }
