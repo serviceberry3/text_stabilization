@@ -27,6 +27,8 @@ public:
     //old data is overwritten
     int circular_buf_put(float data);
 
+    float circular_buf_get_past_entry_flat(int back);
+
     //retrieve a value from the buffer
     //returns 0 on success, -1 if the buffer is empty
     float circular_buf_get();

@@ -22,6 +22,8 @@ public class CircBuffer {
     //add data to the queue; old data is overwritten if buffer is full
     public native int circular_buf_put(float data);
 
+    public native float circular_buf_get_past_entry_flat(int back);
+
     //retrieve a value from the buffer
     //returns 0 on success, -1 if the buffer is empty
     public native float circular_buf_get();

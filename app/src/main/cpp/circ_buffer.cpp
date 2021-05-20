@@ -2,7 +2,10 @@
 
 
 circular_buffer::circular_buffer(size_t sz) {
-    buffer = (float*) memalign(16, sizeof(float)*sz);
+    //buffer = (float*) memalign(16, sizeof(float) * sz);
+
+    //clear all buffer entries to 0
+    buffer = (float*) calloc(sizeof(float), sz);
     buff_address = (long) buffer;
     max = sz;
     circular_buf_reset();
@@ -37,6 +40,35 @@ float circular_buffer::circular_buf_get() {
 
     //return data at tail, otherwise return -10000;
     return r;
+}
+
+//get a value from the buffer at time point latest - back, i.e., calling with back=1 returns a[k-1], where k is current time
+float circular_buffer::circular_buf_get_past_entry_flat(int back) {
+    //make sure raw buffer are non-NULL
+    //TODO: maybe find a better way to do this, since this is supposed to serve as a sort of user-blind API
+    assert(buffer != nullptr);
+
+    //make sure the requested n is not greater than the current population of the queue
+    size_t size = circular_buf_size();
+    if (back > size - 1) { //for example, if user requests k-1 but size is currently only 1
+        return 0;
+    }
+
+    //initialize an average
+    float average = 0;
+
+    //find the head of the queue as an integer. This is the position of the last added data
+    int position_of_last_added_data = (int) head - 1;
+
+    int position_requested = position_of_last_added_data - back;
+
+    //reset when we hit 0
+    if (position_requested < 0) {
+        position_requested = (int) max + position_requested;
+    }
+
+    //return data found
+    return buffer[position_requested];
 }
 
 void circular_buffer::retreat_pointer() {
@@ -171,6 +203,11 @@ extern "C" {
     JNIEXPORT jint Java_weiner_noah_ctojavaconnector_CircBuffer_circular_1buf_1put(JNIEnv* __unused javaEnvironment, jobject obj, jfloat data) {
         auto* cppCircBuffObj = (circular_buffer*) javaEnvironment->GetLongField(obj, getPtrFieldId(javaEnvironment, obj));
         return cppCircBuffObj->circular_buf_put(data);
+    }
+
+    JNIEXPORT jfloat Java_weiner_noah_ctojavaconnector_CircBuffer_circular_1buf_1get_1past_1entry_1flat(JNIEnv* __unused javaEnvironment, jobject obj, jint back) {
+        auto* cppCircBuffObj = (circular_buffer*) javaEnvironment->GetLongField(obj, getPtrFieldId(javaEnvironment, obj));
+        return cppCircBuffObj->circular_buf_get_past_entry_flat(back);
     }
 
     JNIEXPORT jfloat Java_weiner_noah_ctojavaconnector_CircBuffer_circular_1buf_1get(JNIEnv* __unused javaEnvironment, jobject obj) {

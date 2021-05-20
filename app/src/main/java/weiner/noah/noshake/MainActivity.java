@@ -17,17 +17,17 @@ import android.widget.Toast;
 
 import java.util.List;
 
+import weiner.noah.constants.LseConstants;
 import weiner.noah.constants.NaiveConstants;
 import weiner.noah.constants.NoShakeConstants;
 import weiner.noah.openglbufftesting.OpenGLRenderer;
 import weiner.noah.openglbufftesting.OpenGLView;
 import weiner.noah.utils.Utils;
 import weiner.noah.ctojavaconnector.*;
-//import weiner.noah.openglbufftesting;
 
 
 public class MainActivity extends AppCompatActivity implements SensorEventListener, View.OnTouchListener {
-    //NAIVE IMPLEMENTATION ACCEL ARRAYS
+    //NAIVE (N) IMPLEMENTATION ACCEL ARRAYS
 
     //temporary array to store raw linear accelerometer data before low-pass filter applied
     private final float[] NtempAcc = new float[3];
@@ -35,16 +35,43 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     //acceleration array for data after filtering
     private final float[] Nacc = new float[3];
 
-    //velocity array (calculated from acceleration values)
+    //velocity array (integrated from acceleration values)
     private final float[] Nvelocity = new float[3];
 
-    //position (displacement) array (calculated from dVelocity values)
+    //position array (integrated from velocity values)
     private final float[] Nposition = new float[3];
 
-    //NOSHAKE SPRING IMPLEMENTATION ACCEL ARRAYS
+    //NOSHAKE SPRING (S) IMPLEMENTATION ACCEL ARRAYS
     private final float[] StempAcc = new float[3];
     private final float[] Sacc = new float[3];
     private final float[] accAfterFrix = new float[3];
+
+    //AUTOREGRESSIVE (A) IMPLEMENTATION ARRAYS
+
+    //buffer to store recent displacements
+    private CircBuffer xDispBuff, yDispBuff;
+
+    //buffer to store recent theta coefficients (see autoregressive paper)
+    private CircBuffer thetaCoeffBuff;
+
+    //buffers to store latest window (of length n from LseConstants) of displacement data
+    private float[][][] latestDispWindow_phi_k = new float[3][LseConstants.n][1];  //should be (nx1) matrix
+
+    //the P_k value, an intermediate covariance matrix in the recurrent least squares regression algorithm, should be an (nxn) covariance matrix
+    private float[][][] P_k_curr = new float[3][LseConstants.n][LseConstants.n], P_k_prev = new float[3][LseConstants.n][LseConstants.n];
+
+    //there will be n coefficients for the autoregressive model; they update in real time and are fed into eq 2 from the AR paper
+    //it's technically an nx1 matrix
+    private float[][][] theta_k_curr = new float[3][LseConstants.n][1], theta_k_prev = new float[3][LseConstants.n][1];
+
+    private float[] currDisp = new float[3], prevDisp = new float[3];
+
+    private float[] Dhat = new float[3];
+
+    private float[][][] P_k_prev_times_phi_k = new float[3][LseConstants.n][1], //multiplying (nxn)*(nx1) = (nx1) matrix
+            phi_k_T_times_P_k_prev = new float[3][1][LseConstants.n]; //multiplying (1xn)*(nxn) = (1xn) matrix
+
+    private float inverseLambda = 1f / LseConstants.LAMBDA;
 
     //long to use for keeping track of thyme
     private long timestamp = 0;
@@ -67,7 +94,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     //changes in x and y to be used to move the draggable text based on user's finger
     private int _xDelta, _yDelta;
 
-    private CircBuffer xBuff, yBuff, dispBuff;
+    //circ buffer to store x and y accel data
+    private CircBuffer xBuff, yBuff;
     private ImpulseResponse impulseResponse;
     private Convolve xSignalConvolver;
     private Convolve ySignalConvolver;
@@ -205,10 +233,14 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         int height = displayMetrics.heightPixels;
         int width = displayMetrics.widthPixels;
 
-        //initialize a circular float buffers
+        //initialize circular float buffers
         xBuff = new CircBuffer(NoShakeConstants.BUFFER_SIZE);
         yBuff = new CircBuffer(NoShakeConstants.BUFFER_SIZE);
-        dispBuff = new CircBuffer(NoShakeConstants.BUFFER_SIZE);
+
+        //for LSE implementation
+        xDispBuff = new CircBuffer(LseConstants.n);
+        yDispBuff = new CircBuffer(LseConstants.n);
+        thetaCoeffBuff = new CircBuffer(LseConstants.n);
 
         //initialize an impulse response array also of size 211
         impulseResponse = new ImpulseResponse(NoShakeConstants.BUFFER_SIZE, NoShakeConstants.E, NoShakeConstants.SPRING_CONST);
@@ -234,8 +266,13 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             new Thread(waitingTextThread).start();
         }
 
+        //IF USING NORMAL(NOT LINEAR) ACCELEROMETER
         gravity[0] = gravity[1] = gravity[2] = 0;
-        accelBuffer[0] = accelBuffer[1] = accelBuffer[2] = 0;
+
+        //set previous displacement to 0 to start
+        prevDisp[0] = prevDisp[1] = prevDisp[2] = 0;
+
+        populateIdentityMatrices();
 
         //set the draggable text to listen, according to onTouch function (defined below)
         //((TextView)findViewById(R.id.movable_text)).setOnTouchListener(this);
@@ -263,6 +300,15 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
             }
         });
         */
+    }
+
+    //set P_k_prev to identity matrix to begin
+    private void populateIdentityMatrices() {
+        for (int i = 0; i < LseConstants.n; i++) {
+            for (int j = 0; j < LseConstants.n; j++) {
+                P_k_prev[0][i][j] = P_k_prev[1][i][j] = P_k_prev[2][i][j] = ((i == j) ? 1 : 0);
+            }
+        }
     }
 
 
@@ -298,8 +344,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         }
 
         //refresh the text
-        view.invalidate();
-        return true;*/
+        view.invalidate();*/
+
         return true;
     }
 
@@ -352,7 +398,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         openGLView.onPause();
     }
 
-    //a naive and heavily error-prone implementation of NoShake which attempts to calculate the displacement of the phone using the accelerometer data
+    //a naive and heavily error-prone implementation of NoShake which attempts to calculate the displacement of the phone by integrating the accelerometer data
     public void naivePhysicsImplementation(SensorEvent event) {
         if (timestamp != 0)
         {
@@ -366,14 +412,14 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
                 float vFrictionToApply = NaiveConstants.VELOCITY_FRICTION_DEFAULT * Nvelocity[i];
                 Nvelocity[i] += (Nacc[i] * dt) - vFrictionToApply;
 
-                //if resulting value is Nan or infinity, just change it to 0
+                //if resulting value is NaN or infinity, just change it to 0
                 Nvelocity[i] = Utils.fixNanOrInfinite(Nvelocity[i]);
 
                 //find position friction to be applied using last position reading
                 float pFrictionToApply = NaiveConstants.POSITION_FRICTION_DEFAULT * Nposition[i];
                 Nposition[i] += (Nvelocity[i] * NaiveConstants.VELOCITY_AMPL_DEFAULT * dt) - pFrictionToApply;
 
-                //set max limits on the position change
+                //set max limits on the position of the text so that it doesn't leave the screen (can be adjusted in constants file)
                 Nposition[i] = Utils.rangeValue(Nposition[i], -NaiveConstants.MAX_POS_SHIFT, NaiveConstants.MAX_POS_SHIFT);
             }
         }
@@ -393,7 +439,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         //set timestamp to the current time of the sensor reading in nanoseconds
         timestamp = event.timestamp;
 
-        //set the position of the text based on x and y axis values in position float array
+        //set the position of the text based on x and y axis values in displacement float array
         if (APPLY_CORRECTION) {
             applyCorrection(-Nposition[1], -Nposition[0]);
         }
@@ -422,7 +468,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         xSignalConvolver = new Convolve(xBuff, impulseResponse);
         ySignalConvolver = new Convolve(yBuff, impulseResponse);
 
-        //set the NoShake text/graphic back to its original position
+        //set the text/graphic back to its original position
         smileyLayout.setTranslationX(0);
         smileyLayout.setTranslationY(0);
 
@@ -486,7 +532,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         //EXPERIMENTAL: to speed things up, start a separate thread to go write the acceleration data to the buffer while we finish calculations here
         getDataWriteBuffer writerThread = new getDataWriteBuffer(Sacc[0]);
         new Thread(writerThread).start();
-         */
+        */
 
         //try to eliminate noise by knocking low acceleration values down to 0 (also make text re-center faster)
         Sacc[0] = knockLowsToZero(Sacc[0], NoShakeConstants.TO_ZERO_THRESH);
@@ -534,7 +580,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         //((TextView) findViewById(R.id.z_axis)).setText(String.format("Z accel: %f", z));
 
         //OPTIONAL: check to see whether the device is shaking
-        //if (shaking==1) { //empirically-determined threshold in order to keep text still when not really shaking
+        //if (shaking == 1) { //empirically-determined threshold in order to keep text still when not really shaking
             //convolve the circular buffer of acceleration data with the impulse response array to get Y(t) array
             float f = xSignalConvolver.convolve(xBuff.circular_buf_get_head());
             float y = ySignalConvolver.convolve(yBuff.circular_buf_get_head());
@@ -587,7 +633,102 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         //} //OPTIONAL: check to see whether the device is shaking
     }
 
-    private void lseSystemModel(SensorEvent event) {
+    //get an array (matrix) containing last n displacement
+    private void fillLatestDispWindows() {
+        for (int i = 0; i < LseConstants.n; i++) {
+            latestDispWindow_phi_k[0][i][0] = xDispBuff.circular_buf_get_past_entry_flat(i + 1);
+            latestDispWindow_phi_k[0][i][0] = yDispBuff.circular_buf_get_past_entry_flat(i + 1);
+        }
+    }
 
+    private void computeDHats() {
+        for (int i = 0; i < LseConstants.n; i++) {
+
+        }
+    }
+
+    private void lseSystemModel(SensorEvent event) {
+        //get delta t, which will be 0 if the app just started
+        float dt = (timestamp == 0) ? 0 : (event.timestamp - timestamp) * NaiveConstants.NANOSEC_TO_SEC;
+
+        currDisp[0] = (LseConstants.USE_PHYSICS) ? prevDisp[0] + (dt * dt * event.values[0]) :
+                ((LseConstants.RHO * prevDisp[0]) + (LseConstants.GAMMA * event.values[0]));
+
+        currDisp[1] = (LseConstants.USE_PHYSICS) ? prevDisp[1] + (dt * dt * event.values[1]) :
+                ((LseConstants.RHO * prevDisp[1]) + (LseConstants.GAMMA * event.values[1]));
+
+        //calculate current displacement using equation 2 from the paper
+        xDispBuff.circular_buf_put(currDisp[0]);
+        yDispBuff.circular_buf_put(currDisp[1]);
+
+        //get latest "window" of disp data
+        fillLatestDispWindows();
+
+        //now latestXDispWindow and latestYDispWindow will be filled with latest D data
+
+        P_k_prev_times_phi_k[0] = Utils.matrixMult(P_k_prev[0], latestDispWindow_phi_k[0]);
+        P_k_prev_times_phi_k[1] = Utils.matrixMult(P_k_prev[1], latestDispWindow_phi_k[1]);
+
+        phi_k_T_times_P_k_prev[0] = Utils.matrixMult(Utils.flatMatrixTranspose(latestDispWindow_phi_k[0]), P_k_prev[0]);
+        phi_k_T_times_P_k_prev[1] = Utils.matrixMult(Utils.flatMatrixTranspose(latestDispWindow_phi_k[1]), P_k_prev[1]);
+
+
+        //find P_k according to the AR paper
+        P_k_curr[0] = Utils.scalarMatrixMult(
+                Utils.scalarMatrixAddition(
+                        P_k_prev[0],
+                        -(
+                                Utils.singleValMatrixDiv(
+                                Utils.matrixMult(P_k_prev_times_phi_k[0], phi_k_T_times_P_k_prev[0]),  //this should just be a 1x1 matrix
+                                 Utils.scalarMatrixAddition(Utils.matrixMult(phi_k_T_times_P_k_prev[0], latestDispWindow_phi_k[0]), LseConstants.LAMBDA //this should also be 1x1 mat
+                                 )
+                                )
+                        )
+
+        ), inverseLambda
+        );
+
+        P_k_curr[1] = Utils.scalarMatrixMult(
+                Utils.scalarMatrixAddition(
+                        P_k_prev[1],
+                        -(
+                                Utils.singleValMatrixDiv(
+                                        Utils.matrixMult(P_k_prev_times_phi_k[1], phi_k_T_times_P_k_prev[1]),  //this should just be a 1x1 matrix
+                                        Utils.scalarMatrixAddition(Utils.matrixMult(phi_k_T_times_P_k_prev[1], latestDispWindow_phi_k[1]), LseConstants.LAMBDA
+                                        )
+                                )
+                        )
+
+                ), inverseLambda
+        );
+
+
+        theta_k_curr[0] = Utils.matrixAddition(
+                theta_k_prev[0],
+                Utils.scalarMatrixMult(Utils.matrixMult(P_k_curr[0], latestDispWindow_phi_k[0]),
+                        currDisp[0] - (Utils.matrixMult(Utils.flatMatrixTranspose(latestDispWindow_phi_k[0]), theta_k_prev[0]))[0][0]
+                        )
+        );
+
+        theta_k_curr[1] = Utils.matrixAddition(
+                theta_k_prev[1],
+                Utils.scalarMatrixMult(Utils.matrixMult(P_k_curr[1], latestDispWindow_phi_k[1]),
+                        currDisp[1] - (Utils.matrixMult(Utils.flatMatrixTranspose(latestDispWindow_phi_k[1]), theta_k_prev[1]))[0][0]
+                )
+        );
+
+        //now that we have calculated current theta, we are ready to compute Dhat[k+1]
+        computeDHats();
+
+        if (APPLY_CORRECTION) {
+            applyCorrection(-LseConstants.c * Dhat[0], -LseConstants.c * Dhat[1]);
+        }
+
+        //store current sensor event's timestamp in ```timestamp``` so we can find dt at the next cycle
+        timestamp = event.timestamp;
+
+        //make currDisp the prevDisp
+        prevDisp = currDisp;
+        theta_k_prev = theta_k_curr;
     }
 }

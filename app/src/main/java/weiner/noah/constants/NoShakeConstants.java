@@ -4,6 +4,8 @@ public class NoShakeConstants {
     public static final float SPRING_CONST = 250f;
     public static final float DAMPENER_FRIX_CONST = (float) (2.0 * Math.sqrt(SPRING_CONST));
     public static final float LOW_PASS_ALPHA = 0.9f;
+
+    //could calculate actual meters per pixel of the screen, or just use this scaling factor
     public static final float Y_FACTOR = 2000f;
     public static final float E = 2.71828f;
     public static final float SHAKING_THRESHOLD = 0.1f;
