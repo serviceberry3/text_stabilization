@@ -1,6 +1,10 @@
 package weiner.noah.utils;
 
+import android.util.Log;
+
 public class Utils {
+    public static final String TAG = "Utils";
+
     public static float rangeValue(float value, float min, float max)
     {
         //apply boundaries to a given value
@@ -45,18 +49,37 @@ public class Utils {
         return prod;
     }
 
+    //get a column from matrix as a flat float array
+    public static float[] getColFromMat(float[][] m, int index) {
+        //if matrix has no rows or has too few columns for requested index, FAIL
+        if (m.length == 0 || m[0].length < index + 1)
+            return null;
+
+        //result will be float array length of a column (= num of rows)
+        float[] result = new float[m.length];
+
+        for (int row = 0; row < m.length; row++) {
+            result[row] = m[row][index];
+        }
+
+        return result;
+    }
+
     public static float[][] matrixMult(float[][] m1, float[][] m2) {
         //num cols in first must equal num rows in second
         if (m1[0].length != m2.length) {
             return null;
         }
 
+        Log.i(TAG, "Num cols in first is " + m1[0].length + ", rows in second is " + m2.length + ", creating result matrix of dimensions "
+        + m1.length + " x " + m2[0].length);
+
         //resulting matrix is always num rows of first x num cols of second
-        float[][] result = new float[m2[0].length][m1.length];
+        float[][] result = new float[m1.length][m2[0].length];
 
         for (int m1row = 0; m1row < m1.length; m1row++) {
             for (int m2col = 0; m2col < m2[0].length; m2col++) {
-                result[m1row][m2col] = singleDimMatrixMult(m1[m1row], m2[m2col]);
+                result[m1row][m2col] = singleDimMatrixMult(m1[m1row], getColFromMat(m2, m2col));
             }
         }
 

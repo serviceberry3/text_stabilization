@@ -15,6 +15,7 @@ import android.hardware.SensorEventListener;
 import android.hardware.SensorEvent;
 import android.widget.Toast;
 
+import java.util.Arrays;
 import java.util.List;
 
 import weiner.noah.constants.LseConstants;
@@ -125,7 +126,7 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     public static float toMoveX, toMoveY;
 
     //set stabilization implementation
-    private final ImplType mImplType = ImplType.LZ;
+    private final ImplType mImplType = ImplType.LSE;
 
     //whether to use OpenGL for rendering
     private boolean USE_OPENGL_SQUARE_VERS = true;
@@ -637,13 +638,22 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
     private void fillLatestDispWindows() {
         for (int i = 0; i < LseConstants.n; i++) {
             latestDispWindow_phi_k[0][i][0] = xDispBuff.circular_buf_get_past_entry_flat(i + 1);
-            latestDispWindow_phi_k[0][i][0] = yDispBuff.circular_buf_get_past_entry_flat(i + 1);
+            latestDispWindow_phi_k[1][i][0] = yDispBuff.circular_buf_get_past_entry_flat(i + 1);
         }
     }
 
+    //predict the next displacement at time k+1, which will be used to calculate the appropriate offset
     private void computeDHats() {
-        for (int i = 0; i < LseConstants.n; i++) {
+        //reset Dhat to 0
+        Dhat[0] = Dhat[1] = Dhat[2] = 0;
 
+        //AR model equation (equation 2 in the paper): sum up the last set of displacements, multiplying each by the appropriate theta found by LSE
+
+        Dhat[0] += theta_k_curr[0][0][0] * currDisp[0];
+        Dhat[1] += theta_k_curr[1][0][0] * currDisp[1];
+        for (int i = 1; i < LseConstants.n; i++) {
+            Dhat[0] += latestDispWindow_phi_k[0][i - 1][0] * theta_k_curr[0][i][0];
+            Dhat[1] += latestDispWindow_phi_k[1][i - 1][0] * theta_k_curr[1][i][0];
         }
     }
 
@@ -664,28 +674,37 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
         //get latest "window" of disp data
         fillLatestDispWindows();
 
+        Log.i(TAG, "x latest disp window: " + Arrays.deepToString(latestDispWindow_phi_k[0]));
+        //Log.i(TAG, "x latest disp window: " + Arrays.deepToString(latestDispWindow_phi_k[0]));
+
         //now latestXDispWindow and latestYDispWindow will be filled with latest D data
 
+        Log.i(TAG, "Computing P_k_prev_times_phi_k");
         P_k_prev_times_phi_k[0] = Utils.matrixMult(P_k_prev[0], latestDispWindow_phi_k[0]);
         P_k_prev_times_phi_k[1] = Utils.matrixMult(P_k_prev[1], latestDispWindow_phi_k[1]);
 
+        Log.i(TAG, "Computing phi_k_T_times_P_k_prev");
         phi_k_T_times_P_k_prev[0] = Utils.matrixMult(Utils.flatMatrixTranspose(latestDispWindow_phi_k[0]), P_k_prev[0]);
         phi_k_T_times_P_k_prev[1] = Utils.matrixMult(Utils.flatMatrixTranspose(latestDispWindow_phi_k[1]), P_k_prev[1]);
 
+        Log.i(TAG, "P_k_prev_times_phi_k is " + Arrays.deepToString(P_k_prev_times_phi_k[0]) + ", phi_k_T_times_P_k_prev is " + Arrays.deepToString(phi_k_T_times_P_k_prev[0]));
 
+
+        Log.i(TAG, "Computing P_k_curr");
         //find P_k according to the AR paper
         P_k_curr[0] = Utils.scalarMatrixMult(
                 Utils.scalarMatrixAddition(
                         P_k_prev[0],
                         -(
                                 Utils.singleValMatrixDiv(
-                                Utils.matrixMult(P_k_prev_times_phi_k[0], phi_k_T_times_P_k_prev[0]),  //this should just be a 1x1 matrix
-                                 Utils.scalarMatrixAddition(Utils.matrixMult(phi_k_T_times_P_k_prev[0], latestDispWindow_phi_k[0]), LseConstants.LAMBDA //this should also be 1x1 mat
+                                    Utils.matrixMult(P_k_prev_times_phi_k[0], phi_k_T_times_P_k_prev[0]),  //this result should just be a 1x1 matrix
+                                     Utils.scalarMatrixAddition(Utils.matrixMult(phi_k_T_times_P_k_prev[0],
+                                             latestDispWindow_phi_k[0]), LseConstants.LAMBDA //this should also be 1x1 mat
                                  )
                                 )
                         )
 
-        ), inverseLambda
+                ), inverseLambda
         );
 
         P_k_curr[1] = Utils.scalarMatrixMult(
@@ -719,6 +738,8 @@ public class MainActivity extends AppCompatActivity implements SensorEventListen
 
         //now that we have calculated current theta, we are ready to compute Dhat[k+1]
         computeDHats();
+
+        Log.i(TAG, "Current x and y disp are " + currDisp[0] + " and " + currDisp[1] + ", x and y predicted next disp are " + Dhat[0] + " and " + Dhat[1]);
 
         if (APPLY_CORRECTION) {
             applyCorrection(-LseConstants.c * Dhat[0], -LseConstants.c * Dhat[1]);
